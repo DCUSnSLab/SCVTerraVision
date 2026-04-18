@@ -1,0 +1,10 @@
+# DINOv2 (frozen) + linear head — B1 baseline (per ROADMAP §2.6)
+backbone_variant: small        # small | base | large
+backbone_freeze: true
+head: linear
+head_kwargs:
+  use_bn: true
+ce_weight: 1.0
+dice_weight: 0.0
+label_smoothing: 0.0
+class_weights: null            # null = uniform; populate from dataset stats later

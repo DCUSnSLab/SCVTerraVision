@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(.venv/bin/python -m pytest tests/test_models.py -v)",
+      "Bash(.venv/bin/python -m pytest tests/)",
+      "Bash(.venv/bin/python scripts/smoke_test.py --accelerator cpu --epochs 1)",
+      "Bash(.venv/bin/python -m pytest tests/test_callbacks.py -v)",
+      "Bash(.venv/bin/python scripts/smoke_test.py --accelerator cpu --epochs 2 --with-viz)",
+      "Bash(uv pip *)",
+      "Bash(.venv/bin/python *)"
+    ]
+  }
+}

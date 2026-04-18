@@ -1,0 +1,71 @@
+# RUGD dataset config.
+# RUGD label maps are RGB-encoded PNGs. We map RGB -> native id -> unified id.
+# Reference: http://rugd.vision/
+name: rugd
+root: data/rugd
+image_subdir: images
+label_subdir: labels
+splits:
+  train: splits/train.txt
+  val: splits/val.txt
+  test: splits/test.txt
+image_ext: .png
+label_ext: .png
+label_format: rgb  # RUGD label PNGs are RGB-color encoded
+
+# Native RUGD classes (id, name, RGB color in label PNG).
+# Source: RUGD official label palette.
+native_classes:
+  - {id:  0, name: void,           color: [  0,   0,   0]}
+  - {id:  1, name: dirt,           color: [108,  64,  20]}
+  - {id:  2, name: sand,           color: [255, 229, 204]}
+  - {id:  3, name: grass,          color: [  0, 102,   0]}
+  - {id:  4, name: tree,           color: [  0, 255,   0]}
+  - {id:  5, name: pole,           color: [  0, 153, 153]}
+  - {id:  6, name: water,          color: [  0, 128, 255]}
+  - {id:  7, name: sky,            color: [  0,   0, 255]}
+  - {id:  8, name: vehicle,        color: [255, 255,   0]}
+  - {id:  9, name: container,      color: [255,   0, 127]}
+  - {id: 10, name: asphalt,        color: [ 64,  64,  64]}
+  - {id: 11, name: gravel,         color: [255, 128,   0]}
+  - {id: 12, name: building,       color: [255,   0,   0]}
+  - {id: 13, name: mulch,          color: [153,  76,   0]}
+  - {id: 14, name: rock-bed,       color: [102, 102,   0]}
+  - {id: 15, name: log,            color: [102,   0,   0]}
+  - {id: 16, name: bicycle,        color: [  0, 255, 128]}
+  - {id: 17, name: person,         color: [204, 153, 255]}
+  - {id: 18, name: fence,          color: [102,   0, 204]}
+  - {id: 19, name: bush,           color: [255, 153, 204]}
+  - {id: 20, name: sign,           color: [  0, 102, 102]}
+  - {id: 21, name: rock,           color: [153, 204, 255]}
+  - {id: 22, name: bridge,         color: [102, 255, 255]}
+  - {id: 23, name: concrete,       color: [101, 101,  11]}
+  - {id: 24, name: picnic-table,   color: [114,  85,  47]}
+
+# Map each native class name -> unified taxonomy class name (or 'ignore').
+to_unified:
+  void: ignore
+  dirt: traversable_smooth
+  sand: traversable_smooth
+  grass: traversable_grass
+  tree: obstacle_static
+  pole: obstacle_static
+  water: non_traversable_terrain
+  sky: sky
+  vehicle: obstacle_dynamic
+  container: obstacle_static
+  asphalt: traversable_smooth
+  gravel: traversable_smooth
+  building: obstacle_static
+  mulch: traversable_smooth
+  rock-bed: non_traversable_terrain
+  log: obstacle_static
+  bicycle: obstacle_dynamic
+  person: obstacle_dynamic
+  fence: obstacle_static
+  bush: non_traversable_terrain
+  sign: obstacle_static
+  rock: non_traversable_terrain
+  bridge: obstacle_static
+  concrete: traversable_smooth
+  picnic-table: obstacle_static

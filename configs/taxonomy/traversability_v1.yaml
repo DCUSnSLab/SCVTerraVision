@@ -1,0 +1,30 @@
+# Unified taxonomy v1
+# Classes are referenced by stable id; ignore_id excluded from loss/metrics.
+name: traversability_v1
+ignore_id: 255
+
+classes:
+  - id: 0
+    name: traversable_smooth
+    description: Hard or compact surfaces - paved/dirt roads, gravel, concrete, asphalt
+    color: [128, 128, 128]
+  - id: 1
+    name: traversable_grass
+    description: Short grass / mowed lawn - drivable but soft
+    color: [80, 180, 80]
+  - id: 2
+    name: non_traversable_terrain
+    description: Water, mud, deep grass, dense bush, rock pile - terrain that blocks motion
+    color: [180, 90, 30]
+  - id: 3
+    name: obstacle_static
+    description: Tree, pole, building, fence, sign, log, bridge structures
+    color: [200, 40, 40]
+  - id: 4
+    name: obstacle_dynamic
+    description: Person, vehicle, bicycle, animal
+    color: [240, 200, 40]
+  - id: 5
+    name: sky
+    description: Sky region
+    color: [120, 180, 240]

@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Env
+.venv/
+venv/
+.env
+
+# Data (large, keep out of repo)
+data/
+checkpoints/
+outputs/
+wandb/
+mlruns/
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Notebook
+.ipynb_checkpoints/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store

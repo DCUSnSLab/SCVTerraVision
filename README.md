@@ -1,170 +1,55 @@
-# 🤖 TerraVision
+# Camera Perception for Off-road Autonomous Mobility
 
-**Foundation Model 기반 모빌리티 로봇 인지 시스템**
+캠퍼스/험지 자율주행 이동체용 카메라 기반 perception 시스템.
 
-다양한 주행 환경(캠퍼스, 도심, 험지, 농경지)에서 자율주행 로봇이 주변 환경을 이해하고 주행 가능 경로를 판단하기 위한 카메라 기반 인지 모델입니다. DINOv2 등 비전 파운데이션 모델을 활용하여 범용적이고 강건한 인지 성능을 목표로 합니다.
+## 목표
 
----
+- **Traversability segmentation**: 픽셀 단위로 "갈 수 있는 영역" 판단
+- **Object detection**: 사람/차량/지형지물 인식
+- **BEV 출력**: 다중 카메라 융합 → bird's eye view (행동 예측/경로 제어 입력)
 
-## 프로젝트 목적
+## 개발 단계
 
-모빌리티 로봇의 자율주행에 필요한 **시각 인지 파이프라인**을 구축합니다.
+| Phase | 내용 |
+|-------|------|
+| 1 | 데이터 파이프라인 (현재) |
+| 2 | DINOv2 기반 단일 카메라 PoC |
+| 3 | Object detection 통합 |
+| 4 | 멀티 카메라 + BEV |
+| 5 | Jetson 배포 (TensorRT) |
 
-- **Object Detection** — 주행 경로 상의 객체를 탐지하고 분류
-- **Freespace Segmentation** — 주행 가능 영역과 불가 영역을 픽셀 단위로 판별
-- **멀티 환경 대응** — 단일 모델로 캠퍼스, 도심, 험지, 농경지 등 다양한 환경에서 동작
+## 설치
 
----
-
-## 대상 주행 환경 및 인지 객체
-
-### 공통 (전 환경)
-사람(보행자), 차량/로봇, 자전거/킥보드, 동물, 낙하물/장애물
-
-### 캠퍼스
-벤치, 볼라드, 자전거 거치대, 계단/경사로, 건물 출입문, 표지판, 화단/조경물
-
-### 도심
-승용차/버스/트럭, 신호등, 횡단보도, 가드레일, 전봇대, 공사 구조물(바리케이드/콘)
-
-### 험지
-바위, 웅덩이, 경사면, 쓰러진 나무/나뭇가지, 도랑/수로, 불규칙 지면(자갈/진흙)
-
-### 농경지
-밭고랑, 비닐하우스, 관개 시설, 농기계, 작물 열(row), 울타리/경계선
-
----
-
-## 시스템 아키텍처
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   Camera Inputs                     │
-│  ┌───────────┐  ┌───────────────────────────────┐   │
-│  │  Front    │  │   4x Fisheye (360° Surround)  │   │
-│  │  Camera   │  │   FL  /  FR  /  RL  /  RR     │   │
-│  └─────┬─────┘  └──────────────┬────────────────┘   │
-│        │                       │                    │
-│        └───────────┬───────────┘                    │
-│                    ▼                                │
-│        ┌───────────────────────┐                    │
-│        │  Image Preprocessing  │                    │
-│        │  (Undistort / Stitch) │                    │
-│        └───────────┬───────────┘                    │
-│                    ▼                                │
-│        ┌───────────────────────┐                    │
-│        │   Foundation Model    │                    │
-│        │   Backbone (DINOv2)   │                    │
-│        └─────┬─────────┬──────┘                    │
-│              │         │                           │
-│         ┌────▼───┐ ┌───▼────────┐                  │
-│         │  Det   │ │  Seg Head  │                  │
-│         │  Head  │ │ (Freespace)│                  │
-│         └────┬───┘ └───┬────────┘                  │
-│              │         │                           │
-│              ▼         ▼                           │
-│        ┌───────────────────────┐                    │
-│        │   Fusion & Decision   │                    │
-│        │  (Navigation Output)  │                    │
-│        └───────────────────────┘                    │
-└─────────────────────────────────────────────────────┘
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
----
+## 데이터
 
-## 카메라 구성
-
-| 카메라 | 용도 | 비고 |
-|--------|------|------|
-| 전면 카메라 | 전방 정밀 인지 (원거리 객체 탐지) | 일반 렌즈 |
-| Fisheye × 4 | 360° 서라운드 뷰 구성 | 전좌/전우/후좌/후우 |
-
-- Fisheye 왜곡 보정 후 합성 또는 BEV(Bird's Eye View) 변환
-- 전면 카메라는 원거리 정밀 탐지에 활용
-
----
-
-## 기술 스택 (계획)
-
-| 구분 | 기술 |
-|------|------|
-| Backbone | DINOv2 / Grounding DINO |
-| Detection | DINO-DETR / Co-DETR 기반 |
-| Segmentation | Mask2Former / SegFormer 기반 |
-| Framework | PyTorch |
-| 추론 최적화 | TensorRT / ONNX Runtime |
-| 데이터 관리 | CVAT / Label Studio |
-| 실험 관리 | Weights & Biases / MLflow |
-
----
-
-## 프로젝트 구조 (예정)
+`data/` 디렉토리 (gitignore)에 데이터셋 위치. 심볼릭 링크 권장.
 
 ```
-terravision/
-├── configs/                # 학습/추론 설정 파일
-├── data/
-│   ├── raw/               # 원본 데이터
-│   ├── processed/         # 전처리된 데이터
-│   └── annotations/       # 라벨 데이터
-├── models/
-│   ├── backbone/          # 파운데이션 모델 관련
-│   ├── detection/         # Object Detection Head
-│   └── segmentation/      # Freespace Segmentation Head
-├── preprocessing/
-│   ├── undistort/         # Fisheye 왜곡 보정
-│   ├── stitching/         # 멀티 카메라 합성
-│   └── bev/               # Bird's Eye View 변환
-├── training/              # 학습 스크립트
-├── inference/             # 추론 파이프라인
-├── evaluation/            # 평가 메트릭 및 스크립트
-├── utils/                 # 유틸리티 함수
-├── notebooks/             # 실험 노트북
-├── docs/                  # 문서
-└── tests/                 # 테스트 코드
+data/
+├── rugd/
+│   ├── images/
+│   └── labels/
+└── rellis3d/
+    ├── images/
+    └── labels/
 ```
 
----
+데이터셋 출처 안내: `python scripts/download_datasets.py --help`
 
-## 로드맵
+## 빠른 검증
 
-### Phase 1 — 기반 구축
-- [ ] 프로젝트 환경 설정 및 개발 인프라 구축
-- [ ] 카메라 캘리브레이션 및 전처리 파이프라인 개발
-- [ ] 공개 데이터셋 조사 및 선정 (nuScenes, Cityscapes, RUGD 등)
-- [ ] DINOv2 백본 통합 및 기본 Detection/Segmentation 구현
+```bash
+python scripts/verify_dataset.py --dataset rugd --root data/rugd
+python scripts/visualize_samples.py --dataset rugd --root data/rugd --n 8
+pytest
+```
 
-### Phase 2 — 환경별 모델 개발
-- [ ] 캠퍼스/도심 환경 Object Detection 학습 및 평가
-- [ ] 험지/농경지 환경 Object Detection 학습 및 평가
-- [ ] Freespace Segmentation 모델 개발
-- [ ] 멀티태스크 학습 구조 실험
+## 프로젝트 구조
 
-### Phase 3 — 통합 및 최적화
-- [ ] 멀티 카메라 합성 파이프라인 통합
-- [ ] 모델 경량화 및 추론 속도 최적화 (TensorRT)
-- [ ] 온보드 하드웨어 배포 테스트
-- [ ] 실환경 주행 테스트 및 피드백 반영
-
----
-
-## Contributing
-
-프로젝트 기여 방법은 추후 업데이트 예정입니다.
-
----
-
-## License
-
-TBD
-
----
-
-## 📚 참고 자료
-
-- [DINOv2 (Meta AI)](https://github.com/facebookresearch/dinov2)
-- [Grounding DINO](https://github.com/IDEA-Research/GroundingDINO)
-- [Mask2Former](https://github.com/facebookresearch/Mask2Former)
-- [nuScenes Dataset](https://www.nuscenes.org/)
-- [RUGD (Robot Unstructured Ground Driving)](http://rugd.vision/)
-- [Cityscapes Dataset](https://www.cityscapes-dataset.com/)
+자세한 설계는 `/Users/soobinjeon/.claude/plans/buzzing-splashing-karp.md` 참조.

@@ -1,0 +1,43 @@
+# Default training config consumed by scripts/train.py
+seed: 42
+
+data:
+  datasets: [rugd]                    # subset of [rugd, rellis3d]
+  batch_size: 8
+  num_workers: 4
+  crop_h: 518
+  crop_w: 518
+  eval_h: 518
+  eval_w: 518
+  ignore_index: 255
+
+optim:
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+
+trainer:
+  max_epochs: 20
+  precision: "16-mixed"               # bf16-mixed on Ampere+, 32 on CPU
+  accelerator: auto                   # auto | gpu | cpu | mps
+  devices: auto
+  log_every_n_steps: 20
+  check_val_every_n_epoch: 1
+  gradient_clip_val: 1.0
+  deterministic: false
+
+logger:
+  type: tensorboard                   # tensorboard | wandb | csv
+  save_dir: outputs/runs
+  name: ""                            # set by train.py if empty
+
+checkpoint:
+  monitor: val/mIoU
+  mode: max
+  save_top_k: 2
+  save_last: true
+
+viz:
+  enabled: true                       # log image | gt | pred tiles each epoch
+  n_samples: 4
+  every_n_epochs: 1
+  tag_prefix: predictions

@@ -1,0 +1,59 @@
+# RELLIS-3D dataset config (camera/segmentation portion only).
+# RELLIS-3D labels are single-channel PNGs with class ids.
+# Reference: https://github.com/unmannedlab/RELLIS-3D
+name: rellis3d
+root: data/rellis3d
+image_subdir: pylon_camera_node
+label_subdir: pylon_camera_node_label_id
+splits:
+  train: splits/train.lst
+  val: splits/val.lst
+  test: splits/test.lst
+image_ext: .jpg
+label_ext: .png
+label_format: id  # single-channel id map (not RGB)
+
+# Native RELLIS-3D classes. Source: official ontology.
+native_classes:
+  - {id:  0, name: void,           color: [  0,   0,   0]}
+  - {id:  1, name: dirt,           color: [108,  64,  20]}
+  - {id:  3, name: grass,          color: [  0, 102,   0]}
+  - {id:  4, name: tree,           color: [  0, 255,   0]}
+  - {id:  5, name: pole,           color: [  0, 153, 153]}
+  - {id:  6, name: water,          color: [  0, 128, 255]}
+  - {id:  7, name: sky,            color: [  0,   0, 255]}
+  - {id:  8, name: vehicle,        color: [255, 255,   0]}
+  - {id:  9, name: object,         color: [255,   0, 127]}
+  - {id: 10, name: asphalt,        color: [ 64,  64,  64]}
+  - {id: 12, name: building,       color: [255,   0,   0]}
+  - {id: 15, name: log,            color: [102,   0,   0]}
+  - {id: 17, name: person,         color: [204, 153, 255]}
+  - {id: 18, name: fence,          color: [102,   0, 204]}
+  - {id: 19, name: bush,           color: [255, 153, 204]}
+  - {id: 23, name: concrete,       color: [101, 101,  11]}
+  - {id: 27, name: barrier,        color: [170, 170, 170]}
+  - {id: 31, name: puddle,         color: [110,  22, 138]}
+  - {id: 33, name: mud,            color: [134,  45,  60]}
+  - {id: 34, name: rubble,         color: [102, 102,   0]}
+
+to_unified:
+  void: ignore
+  dirt: traversable_smooth
+  grass: traversable_grass
+  tree: obstacle_static
+  pole: obstacle_static
+  water: non_traversable_terrain
+  sky: sky
+  vehicle: obstacle_dynamic
+  object: obstacle_static
+  asphalt: traversable_smooth
+  building: obstacle_static
+  log: obstacle_static
+  person: obstacle_dynamic
+  fence: obstacle_static
+  bush: non_traversable_terrain
+  concrete: traversable_smooth
+  barrier: obstacle_static
+  puddle: non_traversable_terrain
+  mud: non_traversable_terrain
+  rubble: non_traversable_terrain

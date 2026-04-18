@@ -1,0 +1,11 @@
+# DINOv2 (frozen) + DPT-lite head — B2 baseline (per ROADMAP §2.6)
+backbone_variant: small
+backbone_freeze: true
+head: dpt
+head_kwargs:
+  hidden_dim: 128
+  rescale_rates: [4.0, 2.0, 1.0, 0.5]
+ce_weight: 1.0
+dice_weight: 0.5
+label_smoothing: 0.0
+class_weights: null
