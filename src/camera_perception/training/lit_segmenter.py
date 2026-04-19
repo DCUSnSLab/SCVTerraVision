@@ -101,8 +101,9 @@ class LitSegmenter(L.LightningModule):
     def _step(self, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         image = batch["image"]
         target = batch["mask"]
+        present_classes = batch.get("present_classes")
         logits = self(image)
-        loss = self.criterion(logits, target)
+        loss = self.criterion(logits, target, present_classes)
         return loss, logits
 
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:  # noqa: ARG002

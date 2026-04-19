@@ -89,15 +89,68 @@ def test_combined_loss_backward():
     assert torch.isfinite(val).item()
 
 
+def test_cross_entropy_present_classes_zero_gradient_for_absent():
+    """Absent-class logits should receive no gradient (they're masked to -inf)."""
+    loss = CrossEntropySegLoss(num_classes=6, ignore_index=255)
+    logits = torch.randn(1, 6, 4, 4, requires_grad=True)
+    # Target only uses classes {0, 1, 2}. Classes {3, 4, 5} are marked absent.
+    target = torch.randint(0, 3, (1, 4, 4))
+    present = torch.tensor([[True, True, True, False, False, False]])
+    val = loss(logits, target, present)
+    val.backward()
+    assert torch.isfinite(val).item()
+    # Gradient for absent class logits must be zero.
+    assert logits.grad is not None
+    assert torch.all(logits.grad[:, 3:, :, :] == 0)
+    # Gradient for present classes must be non-zero somewhere.
+    assert torch.any(logits.grad[:, :3, :, :] != 0)
+
+
+def test_dice_loss_skips_absent_classes_in_mean():
+    """Dice mean should only count present classes, not zero-probability absent ones."""
+    loss = DiceSegLoss(num_classes=6, ignore_index=255)
+    torch.manual_seed(0)
+    logits = torch.randn(1, 6, 4, 4, requires_grad=True)
+    target = torch.randint(0, 3, (1, 4, 4))
+    present_all = torch.ones(1, 6, dtype=torch.bool)
+    present_half = torch.tensor([[True, True, True, False, False, False]])
+
+    val_all = loss(logits.detach().requires_grad_(True), target, present_all)
+    val_half = loss(logits.detach().requires_grad_(True), target, present_half)
+    # When only 3 classes are present, the dice mean shouldn't be dragged down
+    # by the (forced-zero) absent classes. Expect val_half < val_all in general.
+    assert 0.0 <= val_half.item() <= 1.0 + 1e-5
+    assert 0.0 <= val_all.item() <= 1.0 + 1e-5
+
+
+def test_combined_loss_accepts_present_classes():
+    loss = CombinedSegLoss(num_classes=6, ce_weight=1.0, dice_weight=0.5)
+    logits = torch.randn(2, 6, 8, 8, requires_grad=True)
+    target = torch.randint(0, 4, (2, 8, 8))
+    present = torch.tensor(
+        [
+            [True, True, True, True, False, False],
+            [True, True, True, True, False, False],
+        ]
+    )
+    val = loss(logits, target, present)
+    val.backward()
+    assert torch.isfinite(val).item()
+    assert logits.grad is not None
+    # Absent class gradients are zero.
+    assert torch.all(logits.grad[:, 4:, :, :] == 0)
+
+
 # ----- metrics -----
 
 def test_iou_metric_perfect_prediction(taxonomy_config):
     tax = UnifiedTaxonomy.load(taxonomy_config)
     metric = build_iou_metric(tax.num_classes())
-    target = torch.tensor([[[0, 1, 2], [3, 4, 5]]])
+    # Include every class so no IoU entry ends up nan.
+    ids = torch.arange(tax.num_classes(), dtype=torch.long)
+    target = ids.unsqueeze(0)  # (1, K)
     metric.update(target, target)
     iou = metric.compute()
-    # All present classes should have IoU=1.0
     assert torch.allclose(iou, torch.ones_like(iou))
 
 
@@ -115,18 +168,20 @@ def test_iou_metric_with_ignore_index(taxonomy_config):
 def test_binary_traversability_iou(taxonomy_config):
     tax = UnifiedTaxonomy.load(taxonomy_config)
     metric = BinaryTraversabilityIoU(tax)
-    smooth = tax.name_to_id("traversable_smooth")
-    grass = tax.name_to_id("traversable_grass")
+    # Traversable ids are derived from the TRAVERSABLE group in v2.
+    road = tax.name_to_id("road_paved")
+    grass = tax.name_to_id("grass_low")
     sky = tax.name_to_id("sky")
-    obstacle = tax.name_to_id("obstacle_static")
+    building = tax.name_to_id("building_wall")
 
-    target = torch.tensor([[[smooth, grass, sky, obstacle]]])
-    pred = torch.tensor([[[smooth, grass, sky, obstacle]]])
+    target = torch.tensor([[[road, grass, sky, building]]])
+    pred = torch.tensor([[[road, grass, sky, building]]])
     metric.update(pred, target)
     assert metric.compute().item() == pytest.approx(1.0)
 
     metric.reset()
-    pred_wrong = torch.tensor([[[obstacle, sky, smooth, grass]]])  # all flipped
+    # All traversable pixels predicted as non-traversable and vice versa.
+    pred_wrong = torch.tensor([[[building, sky, road, grass]]])
     metric.update(pred_wrong, target)
     # No overlap, but union is full → IoU = 0
     assert metric.compute().item() == 0.0

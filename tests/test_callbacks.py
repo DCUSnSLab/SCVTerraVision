@@ -19,7 +19,7 @@ from camera_perception.training.callbacks import PredictionVizCallback
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TAXONOMY_CFG = REPO_ROOT / "configs" / "taxonomy" / "traversability_v1.yaml"
+TAXONOMY_CFG = REPO_ROOT / "configs" / "taxonomy" / "traversability_v2.yaml"
 
 
 # --- Stubs -----------------------------------------------------------------

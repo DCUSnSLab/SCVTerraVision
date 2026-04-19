@@ -28,11 +28,11 @@ def _make_rugd_tree(root: Path, n: int = 3) -> None:
     for i in range(n):
         stem = f"creek/creek_{i:05d}"
         img = (np.random.rand(64, 96, 3) * 255).astype(np.uint8)
-        # Build a label with a few known RUGD colors
+        # Build a label with a few known RUGD colors.
         lab = np.zeros((64, 96, 3), dtype=np.uint8)
         lab[:32, :48] = (0, 0, 255)     # sky
-        lab[:32, 48:] = (0, 102, 0)     # grass
-        lab[32:, :48] = (64, 64, 64)    # asphalt
+        lab[:32, 48:] = (0, 102, 0)     # grass  -> grass_low
+        lab[32:, :48] = (64, 64, 64)    # asphalt -> road_paved
         lab[32:, 48:] = (255, 255, 0)   # vehicle
         _write_png(images_dir / f"creek_{i:05d}.png", img)
         _write_png(labels_dir / f"creek_{i:05d}.png", lab)
@@ -52,7 +52,7 @@ def _make_rellis_tree(root: Path, n: int = 3) -> None:
     lines = []
     for i in range(n):
         img = (np.random.rand(64, 96, 3) * 255).astype(np.uint8)
-        # Native RELLIS ids: 3=grass, 7=sky, 17=person, 10=asphalt
+        # Native RELLIS ids: 3=grass -> grass_low, 7=sky, 17=person, 10=asphalt -> road_paved
         lab = np.zeros((64, 96), dtype=np.uint8)
         lab[:32, :48] = 7
         lab[:32, 48:] = 3
@@ -100,17 +100,29 @@ def test_rugd_loads_and_returns_unified_mask(rugd_root, rugd_config, taxonomy_co
     assert sample["mask"].shape == (64, 96)
     assert sample["mask"].dtype == torch.long
 
+    # present_classes is a (num_classes,) bool tensor — rider is absent in RUGD.
+    present = sample["present_classes"]
+    assert isinstance(present, torch.Tensor)
+    assert present.dtype == torch.bool
+    assert present.shape == (ds.taxonomy.num_classes(),)
+    rider_id = ds.taxonomy.name_to_id("rider")
+    bicycle_id = ds.taxonomy.name_to_id("bicycle")
+    assert not present[rider_id].item()
+    assert present[bicycle_id].item()  # RUGD has bicycle
+
+    # meta carries source dataset name.
+    assert sample["meta"]["dataset"] == "rugd"
+
     mask_np = sample["mask"].numpy()
     sky = ds.taxonomy.name_to_id("sky")
-    grass = ds.taxonomy.name_to_id("traversable_grass")
-    smooth = ds.taxonomy.name_to_id("traversable_smooth")
-    dyn = ds.taxonomy.name_to_id("obstacle_dynamic")
+    grass = ds.taxonomy.name_to_id("grass_low")
+    road = ds.taxonomy.name_to_id("road_paved")
+    veh = ds.taxonomy.name_to_id("vehicle")
     assert (mask_np[:32, :48] == sky).all()
     assert (mask_np[:32, 48:] == grass).all()
-    assert (mask_np[32:, :48] == smooth).all()
-    assert (mask_np[32:, 48:] == dyn).all()
+    assert (mask_np[32:, :48] == road).all()
+    assert (mask_np[32:, 48:] == veh).all()
 
-    # image normalized to [0, 1]
     assert sample["image"].min() >= 0.0
     assert sample["image"].max() <= 1.0
     assert sample["meta"]["index"] == 0
@@ -129,13 +141,19 @@ def test_rellis_loads_and_returns_unified_mask(rellis_root, rellis3d_config, tax
     sample = ds[1]
     mask_np = sample["mask"].numpy()
     sky = ds.taxonomy.name_to_id("sky")
-    grass = ds.taxonomy.name_to_id("traversable_grass")
-    smooth = ds.taxonomy.name_to_id("traversable_smooth")
-    dyn = ds.taxonomy.name_to_id("obstacle_dynamic")
+    grass = ds.taxonomy.name_to_id("grass_low")
+    road = ds.taxonomy.name_to_id("road_paved")
+    person = ds.taxonomy.name_to_id("person")
     assert (mask_np[:32, :48] == sky).all()
     assert (mask_np[:32, 48:] == grass).all()
-    assert (mask_np[32:, :48] == smooth).all()
-    assert (mask_np[32:, 48:] == dyn).all()
+    assert (mask_np[32:, :48] == road).all()
+    assert (mask_np[32:, 48:] == person).all()
+
+    # RELLIS-3D has neither bicycle nor rider annotated.
+    present = sample["present_classes"]
+    assert not present[ds.taxonomy.name_to_id("bicycle")].item()
+    assert not present[ds.taxonomy.name_to_id("rider")].item()
+    assert sample["meta"]["dataset"] == "rellis3d"
 
 
 def test_rugd_with_train_transform(rugd_root, rugd_config, taxonomy_config):
@@ -153,3 +171,5 @@ def test_rugd_with_train_transform(rugd_root, rugd_config, taxonomy_config):
     assert sample["image"].shape == (3, 56, 56)
     assert sample["mask"].shape == (56, 56)
     assert sample["mask"].dtype == torch.long
+    # present_classes preserved across transforms.
+    assert sample["present_classes"].shape == (ds.taxonomy.num_classes(),)

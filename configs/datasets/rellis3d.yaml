@@ -38,22 +38,32 @@ native_classes:
 
 to_unified:
   void: ignore
-  dirt: traversable_smooth
-  grass: traversable_grass
-  tree: obstacle_static
-  pole: obstacle_static
-  water: non_traversable_terrain
+  dirt: path_unpaved
+  grass: grass_low
+  tree: tree
+  pole: vertical_pole
+  water: water
   sky: sky
-  vehicle: obstacle_dynamic
-  object: obstacle_static
-  asphalt: traversable_smooth
-  building: obstacle_static
-  log: obstacle_static
-  person: obstacle_dynamic
-  fence: obstacle_static
-  bush: non_traversable_terrain
-  concrete: traversable_smooth
-  barrier: obstacle_static
-  puddle: non_traversable_terrain
-  mud: non_traversable_terrain
-  rubble: non_traversable_terrain
+  vehicle: vehicle
+  object: building_wall
+  asphalt: road_paved
+  building: building_wall
+  log: barrier_fence
+  person: person
+  fence: barrier_fence
+  bush: rough_terrain
+  concrete: road_paved
+  barrier: barrier_fence
+  puddle: water
+  mud: mud
+  rubble: rough_terrain
+
+# Unified-v2 classes that this dataset does NOT label. See rugd.yaml for the
+# rationale behind per-dataset ignore. RELLIS-3D has no bicycle/rider/animal
+# annotations and no agricultural classes.
+ignore_if_absent:
+  - rider
+  - bicycle
+  - animal
+  - furrow
+  - polytunnel

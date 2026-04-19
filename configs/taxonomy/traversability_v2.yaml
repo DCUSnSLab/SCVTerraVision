@@ -1,0 +1,134 @@
+# Unified taxonomy v2 — 19 classes + ignore (255)
+# Covers: 캠퍼스 · 도심 · 험지 · 농경지 4개 환경.
+# Hierarchical: classes grouped into {TRAVERSABLE, NON_TRAVERSABLE_TERRAIN,
+# OBSTACLE_STATIC, OBSTACLE_DYNAMIC, CONTEXT}. Also provides a rollup back to v1
+# for downstream consumers that prefer the coarser 6-class output.
+name: traversability_v2
+version: v2
+ignore_id: 255
+
+groups:
+  TRAVERSABLE:
+    - road_paved
+    - path_unpaved
+    - grass_low
+    - furrow
+  NON_TRAVERSABLE_TERRAIN:
+    - water
+    - mud
+    - rough_terrain
+  OBSTACLE_STATIC:
+    - building_wall
+    - vertical_pole
+    - tree
+    - barrier_fence
+    - polytunnel
+  OBSTACLE_DYNAMIC:
+    - person
+    - rider
+    - bicycle
+    - vehicle
+    - animal
+  CONTEXT:
+    - sky
+
+# v2 class name -> v1 class name. Enables inference-time rollup to the coarser
+# 6-class taxonomy defined in traversability_v1.yaml.
+rollup_to_v1:
+  road_paved: traversable_smooth
+  path_unpaved: traversable_smooth
+  grass_low: traversable_grass
+  furrow: traversable_smooth
+  water: non_traversable_terrain
+  mud: non_traversable_terrain
+  rough_terrain: non_traversable_terrain
+  building_wall: obstacle_static
+  vertical_pole: obstacle_static
+  tree: obstacle_static
+  barrier_fence: obstacle_static
+  polytunnel: obstacle_static
+  person: obstacle_dynamic
+  rider: obstacle_dynamic
+  bicycle: obstacle_dynamic
+  vehicle: obstacle_dynamic
+  animal: obstacle_dynamic
+  sky: sky
+
+classes:
+  # --- TRAVERSABLE -----------------------------------------------------------
+  - id: 0
+    name: road_paved
+    description: Paved driveable surfaces - asphalt, concrete, sidewalks, crosswalks
+    color: [128, 64, 128]
+  - id: 1
+    name: path_unpaved
+    description: Unpaved driveable surfaces - dirt roads, gravel, forest trails
+    color: [140, 100, 60]
+  - id: 2
+    name: grass_low
+    description: Mowed lawn / short grass - driveable but soft
+    color: [80, 180, 80]
+  - id: 3
+    name: furrow
+    description: Agricultural furrow (not labeled in current public datasets)
+    color: [160, 120, 60]
+  # --- NON_TRAVERSABLE_TERRAIN ----------------------------------------------
+  - id: 4
+    name: water
+    description: Water bodies - ponds, puddles, ditches
+    color: [0, 128, 255]
+  - id: 5
+    name: mud
+    description: Mud, wet soil, flooded fields
+    color: [120, 70, 40]
+  - id: 6
+    name: rough_terrain
+    description: Dense brush, tall grass, rock piles, rubble
+    color: [180, 90, 30]
+  # --- OBSTACLE_STATIC ------------------------------------------------------
+  - id: 7
+    name: building_wall
+    description: Buildings, walls, large static structures
+    color: [180, 80, 80]
+  - id: 8
+    name: vertical_pole
+    description: Poles, traffic signs, signals, streetlights, thin vertical obstacles
+    color: [220, 220, 0]
+  - id: 9
+    name: tree
+    description: Trees, tall vegetation
+    color: [0, 130, 0]
+  - id: 10
+    name: barrier_fence
+    description: Fences, guardrails, curbs, bollards, barriers, crop-row dividers
+    color: [190, 153, 100]
+  - id: 11
+    name: polytunnel
+    description: Polytunnel / greenhouse (not labeled in current public datasets)
+    color: [220, 220, 255]
+  # --- OBSTACLE_DYNAMIC -----------------------------------------------------
+  - id: 12
+    name: person
+    description: Pedestrians (not mounted on a vehicle)
+    color: [220, 20, 60]
+  - id: 13
+    name: rider
+    description: Person mounted on a bicycle / motorcycle / scooter
+    color: [255, 0, 0]
+  - id: 14
+    name: bicycle
+    description: Bicycle as an object (with or without rider)
+    color: [119, 11, 32]
+  - id: 15
+    name: vehicle
+    description: Motorized vehicles - cars, trucks, buses, motorcycles, robots, farm machinery
+    color: [0, 0, 142]
+  - id: 16
+    name: animal
+    description: Dogs, cats, deer, cattle, other animals
+    color: [255, 150, 100]
+  # --- CONTEXT --------------------------------------------------------------
+  - id: 17
+    name: sky
+    description: Sky region
+    color: [120, 180, 240]

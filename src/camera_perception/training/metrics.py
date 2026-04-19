@@ -2,6 +2,10 @@
 
 Provides per-class IoU, mIoU, and a binary "traversability" IoU that groups
 unified classes into traversable vs non-traversable.
+
+Traversable class ids are derived from the taxonomy's `TRAVERSABLE` group if
+present (v2+), or fall back to the hardcoded v1 names otherwise. This keeps
+the metric working for both taxonomy versions without edits.
 """
 
 from __future__ import annotations
@@ -12,9 +16,9 @@ from torchmetrics.classification import MulticlassJaccardIndex
 
 from camera_perception.data.taxonomy import UnifiedTaxonomy
 
-# Unified class ids that are considered traversable for the binary metric.
-# Keep in sync with configs/taxonomy/traversability_v1.yaml.
-TRAVERSABLE_CLASS_NAMES = ("traversable_smooth", "traversable_grass")
+# Fallback class names when the taxonomy does not declare a TRAVERSABLE group
+# (i.e. v1). Must match configs/taxonomy/traversability_v1.yaml.
+V1_TRAVERSABLE_CLASS_NAMES = ("traversable_smooth", "traversable_grass")
 
 
 def build_iou_metric(num_classes: int, ignore_index: int = 255) -> MulticlassJaccardIndex:
@@ -24,6 +28,18 @@ def build_iou_metric(num_classes: int, ignore_index: int = 255) -> MulticlassJac
         ignore_index=ignore_index,
         average=None,
     )
+
+
+def _traversable_class_ids(taxonomy: UnifiedTaxonomy) -> list[int]:
+    """Resolve traversable class ids from the taxonomy.
+
+    Preference order:
+      1. Explicit `TRAVERSABLE` group (v2+).
+      2. Fallback to v1 class names.
+    """
+    if "TRAVERSABLE" in taxonomy.groups:
+        return taxonomy.class_ids_in_group("TRAVERSABLE")
+    return [taxonomy.name_to_id(n) for n in V1_TRAVERSABLE_CLASS_NAMES]
 
 
 class BinaryTraversabilityIoU(Metric):
@@ -39,7 +55,7 @@ class BinaryTraversabilityIoU(Metric):
     def __init__(self, taxonomy: UnifiedTaxonomy, ignore_index: int = 255) -> None:
         super().__init__()
         self.ignore_index = ignore_index
-        trav_ids = [taxonomy.name_to_id(n) for n in TRAVERSABLE_CLASS_NAMES]
+        trav_ids = _traversable_class_ids(taxonomy)
         self.register_buffer(
             "trav_ids",
             torch.tensor(trav_ids, dtype=torch.long),

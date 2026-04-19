@@ -27,10 +27,15 @@ def main() -> None:
     parser.add_argument("--root", default=None, help="Override dataset root path")
     parser.add_argument("--split", default="train")
     parser.add_argument("--max-samples", type=int, default=200, help="Cap for class stats")
+    parser.add_argument(
+        "--taxonomy",
+        default="traversability_v2",
+        help="Taxonomy config under configs/taxonomy/<name>.yaml",
+    )
     args = parser.parse_args()
 
     cfg = REPO_ROOT / "configs" / "datasets" / f"{args.dataset}.yaml"
-    tax = REPO_ROOT / "configs" / "taxonomy" / "traversability_v1.yaml"
+    tax = REPO_ROOT / "configs" / "taxonomy" / f"{args.taxonomy}.yaml"
     ds_cls = DATASET_CLASSES[args.dataset]
     ds = ds_cls(
         dataset_config=cfg,

@@ -66,9 +66,14 @@ def main() -> None:
     parser.add_argument("--out", default="outputs/eval/run", help="output directory")
     parser.add_argument("--n-viz", type=int, default=8)
     parser.add_argument("--device", default="auto", help="auto | cpu | cuda | mps")
+    parser.add_argument(
+        "--taxonomy",
+        default="traversability_v2",
+        help="Taxonomy config under configs/taxonomy/<name>.yaml",
+    )
     args = parser.parse_args()
 
-    taxonomy_cfg = REPO_ROOT / "configs" / "taxonomy" / "traversability_v1.yaml"
+    taxonomy_cfg = REPO_ROOT / "configs" / "taxonomy" / f"{args.taxonomy}.yaml"
     dataset_cfg = REPO_ROOT / "configs" / "datasets" / f"{args.dataset}.yaml"
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -74,10 +74,13 @@ def main() -> None:
     print(f"[train] run_name = {run_name}")
     print(OmegaConf.to_yaml(cfg))
 
+    taxonomy_name = cfg.data.get("taxonomy", "traversability_v2")
+    taxonomy_cfg = REPO_ROOT / "configs" / "taxonomy" / f"{taxonomy_name}.yaml"
+
     dm = SegDataModule(
         datasets=list(cfg.data.datasets),
         dataset_config_dir=REPO_ROOT / "configs" / "datasets",
-        taxonomy_config=REPO_ROOT / "configs" / "taxonomy" / "traversability_v1.yaml",
+        taxonomy_config=taxonomy_cfg,
         batch_size=cfg.data.batch_size,
         num_workers=cfg.data.num_workers,
         crop_h=cfg.data.crop_h,
@@ -90,7 +93,7 @@ def main() -> None:
     )
 
     model = LitSegmenter(
-        taxonomy_config=str(REPO_ROOT / "configs" / "taxonomy" / "traversability_v1.yaml"),
+        taxonomy_config=str(taxonomy_cfg),
         backbone_variant=cfg.model.backbone_variant,
         backbone_freeze=cfg.model.backbone_freeze,
         head=cfg.model.head,

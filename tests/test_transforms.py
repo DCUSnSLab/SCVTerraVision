@@ -12,9 +12,9 @@ from camera_perception.data.transforms import (
 )
 
 
-def _dummy_pair(h: int = 200, w: int = 300, ignore_id: int = 255):
+def _dummy_pair(h: int = 200, w: int = 300, ignore_id: int = 255, num_classes: int = 19):
     img = (np.random.rand(h, w, 3) * 255).astype(np.uint8)
-    mask = np.random.randint(0, 6, size=(h, w), dtype=np.int64)
+    mask = np.random.randint(0, num_classes, size=(h, w), dtype=np.int64)
     # Sprinkle some ignore pixels
     mask[0, 0] = ignore_id
     return img, mask

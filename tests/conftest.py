@@ -14,6 +14,13 @@ def repo_root() -> Path:
 
 @pytest.fixture
 def taxonomy_config() -> Path:
+    """Default taxonomy used across tests — v2 (19 classes + ignore)."""
+    return REPO_ROOT / "configs" / "taxonomy" / "traversability_v2.yaml"
+
+
+@pytest.fixture
+def taxonomy_v1_config() -> Path:
+    """Legacy v1 taxonomy (6 classes). Kept for rollup tests."""
     return REPO_ROOT / "configs" / "taxonomy" / "traversability_v1.yaml"
 
 

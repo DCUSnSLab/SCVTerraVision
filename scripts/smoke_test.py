@@ -39,7 +39,7 @@ def main() -> None:
     args = parser.parse_args()
 
     L.seed_everything(0, workers=True)
-    taxonomy_cfg = REPO_ROOT / "configs" / "taxonomy" / "traversability_v1.yaml"
+    taxonomy_cfg = REPO_ROOT / "configs" / "taxonomy" / "traversability_v2.yaml"
     dataset_cfg_dir = REPO_ROOT / "configs" / "datasets"
 
     with tempfile.TemporaryDirectory() as td:

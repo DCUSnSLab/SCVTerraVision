@@ -42,30 +42,45 @@ native_classes:
   - {id: 23, name: concrete,       color: [101, 101,  11]}
   - {id: 24, name: picnic-table,   color: [114,  85,  47]}
 
-# Map each native class name -> unified taxonomy class name (or 'ignore').
+# Map each native class name -> unified taxonomy v2 class name (or 'ignore').
+# Off-road oriented: no distinction between paved/unpaved surfaces,
+# no separate rider class (RUGD labels "person" regardless of bicycle mount).
 to_unified:
   void: ignore
-  dirt: traversable_smooth
-  sand: traversable_smooth
-  grass: traversable_grass
-  tree: obstacle_static
-  pole: obstacle_static
-  water: non_traversable_terrain
+  dirt: path_unpaved
+  sand: path_unpaved
+  grass: grass_low
+  tree: tree
+  pole: vertical_pole
+  water: water
   sky: sky
-  vehicle: obstacle_dynamic
-  container: obstacle_static
-  asphalt: traversable_smooth
-  gravel: traversable_smooth
-  building: obstacle_static
-  mulch: traversable_smooth
-  rock-bed: non_traversable_terrain
-  log: obstacle_static
-  bicycle: obstacle_dynamic
-  person: obstacle_dynamic
-  fence: obstacle_static
-  bush: non_traversable_terrain
-  sign: obstacle_static
-  rock: non_traversable_terrain
-  bridge: obstacle_static
-  concrete: traversable_smooth
-  picnic-table: obstacle_static
+  vehicle: vehicle
+  container: building_wall
+  asphalt: road_paved
+  gravel: path_unpaved
+  building: building_wall
+  mulch: path_unpaved
+  rock-bed: rough_terrain
+  log: barrier_fence
+  bicycle: bicycle
+  person: person
+  fence: barrier_fence
+  bush: rough_terrain
+  sign: vertical_pole
+  rock: rough_terrain
+  bridge: barrier_fence
+  concrete: road_paved
+  picnic-table: barrier_fence
+
+# Unified-v2 classes that this dataset does NOT label. Loss/metric code masks
+# these classes out of learning signal for samples from this dataset.
+# - rider: RUGD labels person regardless of whether mounted (no separate rider)
+# - animal: not present in RUGD
+# - mud: RUGD dirt covers both dry soil and wet patches; too ambiguous to force
+# - furrow, polytunnel: agricultural; not in RUGD
+ignore_if_absent:
+  - rider
+  - animal
+  - mud
+  - furrow
+  - polytunnel

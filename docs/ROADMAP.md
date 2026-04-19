@@ -50,7 +50,9 @@
 
 | Phase | 목표 | 상태 | 핵심 산출물 |
 |-------|------|------|-------------|
-| **1** | 데이터 파이프라인 | ✅ 완료 | RUGD/RELLIS-3D 로더, 통합 taxonomy(6-class), augmentation, viz |
+| **1** | 데이터 파이프라인 | ✅ 완료 | RUGD/RELLIS-3D 로더, 통합 taxonomy v2(18-class), per-dataset ignore, augmentation, viz |
+| **2A** | Taxonomy v2 migration | ✅ 완료 | v2 19-class 도입, loss logit masking, rollup→v1 |
+| **2B** | 도심 데이터셋 추가 | 진행 예정 | Cityscapes/BDD100K 로더, multi-domain weighted sampler, per-domain eval |
 | **2** | 단일 카메라 PoC (모델) | 진행 예정 | DINOv2 backbone + seg head, WVN-style 비교, 학습/평가 루프 |
 | **3** | Object detection 통합 | | OWL-ViT / YOLO-World 또는 DINOv2 detection head |
 | **4** | 멀티 카메라 + BEV | | 6-cam calibration, IPM 베이스라인, LSS 확장 |
@@ -64,12 +66,15 @@
 
 **완료된 항목** (구현 상세는 `/Users/soobinjeon/.claude/plans/buzzing-splashing-karp.md` 참조)
 
-- 통합 taxonomy v1 (6-class + ignore): traversable_smooth, traversable_grass, non_traversable_terrain, obstacle_static, obstacle_dynamic, sky
-- RUGD (RGB 라벨), RELLIS-3D (id 라벨) 로더
+- 통합 taxonomy **v2** (18-class + ignore) — 캠퍼스·도심·험지·농경지 4개 환경 커버.
+  계층형 5-group 구조 + v1 rollup 지원. 상세 명세는 `docs/TAXONOMY_V2.md`.
+- 데이터셋 `ignore_if_absent` 매커니즘 — 각 데이터셋이 라벨하지 않는 클래스는
+  loss/metric에서 자동 마스킹 (logit → -inf)
+- RUGD (RGB 라벨), RELLIS-3D (id 라벨) 로더 — v2로 재매핑 완료
 - Albumentations 기반 transforms (DINOv2 14배수 정렬, ImageNet norm)
 - Visualization (triptych, class histogram)
 - 검증/시각화 스크립트
-- 15개 단위 테스트 통과
+- 단위 테스트 (taxonomy v2 load, rollup, per-dataset ignore, loss masking)
 
 ---
 
