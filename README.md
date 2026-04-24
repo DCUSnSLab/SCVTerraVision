@@ -2,7 +2,7 @@
 
 **Foundation Model 기반 모빌리티 로봇 인지 시스템**
 
-다양한 주행 환경(캠퍼스, 도심, 험지, 농경지)에서 자율주행 로봇이 주변 환경을 이해하고 주행 가능 경로를 판단하기 위한 카메라 기반 인지 모델입니다. DINOv2 등 비전 파운데이션 모델을 활용하여 범용적이고 강건한 인지 성능을 목표로 합니다.
+다양한 주행 환경(캠퍼스, 도심, 험지, 농경지)에서 자율주행 로봇이 주변 환경을 이해하고 주행 가능 경로를 판단하기 위한 카메라 기반 인지 모델입니다. DINOv3 등 비전 파운데이션 모델을 활용하여 범용적이고 강건한 인지 성능을 목표로 합니다.
 
 ---
 
@@ -10,8 +10,9 @@
 
 모빌리티 로봇의 자율주행에 필요한 **시각 인지 파이프라인**을 구축합니다.
 
-- **Object Detection** — 주행 경로 상의 객체를 탐지하고 분류
-- **Freespace Segmentation** — 주행 가능 영역과 불가 영역을 픽셀 단위로 판별
+- **Object Detection + Tracking** — 주행 경로 상의 객체를 탐지·분류하고 연속 프레임에서 ID 를 유지
+- **BEV Projection** — 객체의 지상 좌표 `(x_m, y_m, vx, vy)` 를 추정해 제어부로 전달
+- **Traversability Segmentation** (a.k.a. *Freespace / Drivable Area*) — 주행 가능 영역을 픽셀 단위로 판별
 - **멀티 환경 대응** — 단일 모델로 캠퍼스, 도심, 험지, 농경지 등 다양한 환경에서 동작
 
 ---
@@ -37,38 +38,27 @@
 
 ## 시스템 아키텍처
 
+Phase 1 은 **전면 단일 카메라 → Detection → Tracking → BEV 좌표** 의 단일 경로를 먼저 구축하고, Phase 2 에서 Traversability head 를, Phase 3 에서 멀티 카메라 Fisheye 파이프라인을 확장합니다.
+
+```mermaid
+flowchart LR
+    CAM[Front Camera<br/>RGB frame] --> PRE[Preproc<br/>undistort + resize]
+    PRE --> BB[DINOv3 ViT-B/16<br/>backbone via HF Transformers]
+    BB --> HEAD[DETR Head<br/>Hungarian matcher]
+    HEAD --> DET["Detections<br/>bbox + class + score"]
+    DET --> TRK[ByteTrack / OC-SORT<br/>via boxmot]
+    TRK --> TRKOUT["Tracked bbox<br/>+ track_id"]
+    TRKOUT --> FOOT[Ground-contact<br/>point extractor]
+    CALIB[Intrinsic K<br/>Extrinsic R,t] --> IPM
+    FOOT --> IPM[Flat-ground IPM<br/>cv2.warpPerspective]
+    IPM --> OUT["Control msg<br/>{track_id, class, x_m, y_m,<br/>vx, vy, conf, t}"]
+    OUT --> CTRL[Control team<br/>ROS2 or TCP-JSON]
+    BB -. Phase 2 .-> SEG[Traversability head<br/>Mask2Former / SegFormer]
+    SEG -. Phase 2 .-> FUSE[Fusion & Decision]
+    OUT --> FUSE
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Camera Inputs                     │
-│  ┌───────────┐  ┌───────────────────────────────┐   │
-│  │  Front    │  │   4x Fisheye (360° Surround)  │   │
-│  │  Camera   │  │   FL  /  FR  /  RL  /  RR     │   │
-│  └─────┬─────┘  └──────────────┬────────────────┘   │
-│        │                       │                    │
-│        └───────────┬───────────┘                    │
-│                    ▼                                │
-│        ┌───────────────────────┐                    │
-│        │  Image Preprocessing  │                    │
-│        │  (Undistort / Stitch) │                    │
-│        └───────────┬───────────┘                    │
-│                    ▼                                │
-│        ┌───────────────────────┐                    │
-│        │   Foundation Model    │                    │
-│        │   Backbone (DINOv2)   │                    │
-│        └─────┬─────────┬──────┘                    │
-│              │         │                           │
-│         ┌────▼───┐ ┌───▼────────┐                  │
-│         │  Det   │ │  Seg Head  │                  │
-│         │  Head  │ │ (Freespace)│                  │
-│         └────┬───┘ └───┬────────┘                  │
-│              │         │                           │
-│              ▼         ▼                           │
-│        ┌───────────────────────┐                    │
-│        │   Fusion & Decision   │                    │
-│        │  (Navigation Output)  │                    │
-│        └───────────────────────┘                    │
-└─────────────────────────────────────────────────────┘
-```
+
+세부 단계별 계획과 진행 상황은 [`docs/PLAN.md`](docs/PLAN.md) 와 [`docs/progress/`](docs/progress/) 에서 관리합니다.
 
 ---
 
@@ -88,13 +78,16 @@
 
 | 구분 | 기술 |
 |------|------|
-| Backbone | DINOv2 / Grounding DINO |
-| Detection | DINO-DETR / Co-DETR 기반 |
-| Segmentation | Mask2Former / SegFormer 기반 |
+| Backbone | DINOv3 ViT-B/16 (gated, HF Transformers) · 폴백: DINOv2 ViT-B/14 (Apache-2.0) |
+| Detection Head | mmdetection DINO-DETR (백본만 교체) |
+| Tracking | `boxmot` — ByteTrack / OC-SORT |
+| BEV Projection | OpenCV `calibrateCamera` + `warpPerspective` (flat-ground IPM) |
+| Traversability | Mask2Former / SegFormer 기반 (Phase 2) |
 | Framework | PyTorch |
-| 추론 최적화 | TensorRT / ONNX Runtime |
-| 데이터 관리 | CVAT / Label Studio |
-| 실험 관리 | Weights & Biases / MLflow |
+| 추론 최적화 | TensorRT / ONNX Runtime (Phase 3) |
+| 데이터 관리 | CVAT, COCO JSON 통일 |
+| 실험 관리 | Weights & Biases |
+| 설정 관리 | Hydra + OmegaConf |
 
 ---
 
@@ -108,9 +101,9 @@ terravision/
 │   ├── processed/         # 전처리된 데이터
 │   └── annotations/       # 라벨 데이터
 ├── models/
-│   ├── backbone/          # 파운데이션 모델 관련
-│   ├── detection/         # Object Detection Head
-│   └── segmentation/      # Freespace Segmentation Head
+│   ├── backbone/          # 파운데이션 모델 (DINOv3 래퍼)
+│   ├── detection/         # Object Detection Head (DETR)
+│   └── traversability/    # Traversability (Freespace / Drivable Area) Head
 ├── preprocessing/
 │   ├── undistort/         # Fisheye 왜곡 보정
 │   ├── stitching/         # 멀티 카메라 합성
@@ -128,23 +121,30 @@ terravision/
 
 ## 로드맵
 
-### Phase 1 — 기반 구축
-- [ ] 프로젝트 환경 설정 및 개발 인프라 구축
-- [ ] 카메라 캘리브레이션 및 전처리 파이프라인 개발
-- [ ] 공개 데이터셋 조사 및 선정 (nuScenes, Cityscapes, RUGD 등)
-- [ ] DINOv2 백본 통합 및 기본 Detection/Segmentation 구현
+단계별 세부 체크리스트·검증 로그·사용자 검토 결과는 [`docs/progress/`](docs/progress/) 에서 관리합니다. 각 단계는 **독립 PR + 사용자 검토 + 승인 후 다음 단계** 게이팅으로 진행합니다.
 
-### Phase 2 — 환경별 모델 개발
-- [ ] 캠퍼스/도심 환경 Object Detection 학습 및 평가
-- [ ] 험지/농경지 환경 Object Detection 학습 및 평가
-- [ ] Freespace Segmentation 모델 개발
-- [ ] 멀티태스크 학습 구조 실험
+### Phase 0 — 기반 인프라
+- [ ] `pyproject.toml`, `.pre-commit-config.yaml`, `pytest.ini`, `.gitignore`
+- [ ] Hydra 골격 (`configs/base.yaml`)
+- [ ] `docs/PLAN.md` / `docs/progress/` / `docs/decisions/` 문서 체계 구축
+- [ ] 디렉토리 네이밍 정리 (`segmentation/` → `traversability/`)
 
-### Phase 3 — 통합 및 최적화
-- [ ] 멀티 카메라 합성 파이프라인 통합
-- [ ] 모델 경량화 및 추론 속도 최적화 (TensorRT)
-- [ ] 온보드 하드웨어 배포 테스트
-- [ ] 실환경 주행 테스트 및 피드백 반영
+### Phase 1 — Object Perception 파이프라인 (전면 단일 카메라)
+- [ ] 1-1 데이터 로더 — COCO JSON 통일, BDD100K → COCO 변환
+- [ ] 1-2 Detection — DINOv3 백본 래퍼 + DETR head 학습 + 캠퍼스 파인튠
+- [ ] 1-3 Tracking — `boxmot` ByteTrack 연결, MOTA/IDF1 평가
+- [ ] 1-4 BEV Projection — 캘리브레이션 + flat-ground IPM + 제어부 인터페이스
+- [ ] 1-5 통합·최적화 — `inference/pipeline.py`, 목표 ≥15 FPS @ 1280×720
+
+### Phase 2 — Traversability Segmentation
+- [ ] DINOv3 백본 공유 + Mask2Former/SegFormer head
+- [ ] RUGD / Rellis-3D / Cityscapes / 자체 농경지 데이터 통합
+- [ ] Detection 과의 멀티태스크 vs 분리 모델 실험
+
+### Phase 3 — 멀티 카메라 · 온보드 배포
+- [ ] Fisheye 4대 캘리브레이션 (OCamCalib / Kalibr) 및 BEV 융합
+- [ ] TensorRT INT8 경량화
+- [ ] Jetson Orin 급 온보드 실환경 주행 테스트
 
 ---
 
@@ -156,15 +156,21 @@ terravision/
 
 ## License
 
-TBD
+본 저장소의 **자체 구현 코드는 MIT License** (ⓒ 2026 Software and System Laboratory, Daegu Catholic University) 를 따릅니다. 전체 조항은 [`LICENSE`](LICENSE) 참고.
+
+외부 의존성 · 모델 가중치는 각자의 라이선스를 따릅니다. 특히 DINOv3 사전학습 가중치는 Apache-2.0 이 아닌 **자체 DINOv3 License** (Hugging Face gated access) 로 배포되므로, 다운로드 전 HF 계정에서 라이선스 동의가 필요하며 상용 배포 조건은 별도 검토해야 합니다 — `docs/decisions/20260422_dinov3-backbone.md` 참고.
 
 ---
 
 ## 📚 참고 자료
 
-- [DINOv2 (Meta AI)](https://github.com/facebookresearch/dinov2)
-- [Grounding DINO](https://github.com/IDEA-Research/GroundingDINO)
+- [DINOv3 (Meta AI)](https://github.com/facebookresearch/dinov3)
+- [DINOv2 (Meta AI)](https://github.com/facebookresearch/dinov2) — 폴백 백본
+- [mmdetection (DINO-DETR)](https://github.com/open-mmlab/mmdetection)
+- [boxmot (tracking)](https://github.com/mikel-brostrom/boxmot)
 - [Mask2Former](https://github.com/facebookresearch/Mask2Former)
 - [nuScenes Dataset](https://www.nuscenes.org/)
+- [BDD100K Dataset](https://bdd-data.berkeley.edu/)
 - [RUGD (Robot Unstructured Ground Driving)](http://rugd.vision/)
+- [Rellis-3D Dataset](https://github.com/unmannedlab/RELLIS-3D)
 - [Cityscapes Dataset](https://www.cityscapes-dataset.com/)

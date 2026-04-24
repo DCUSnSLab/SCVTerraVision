@@ -1,0 +1,15 @@
+# Hydra subgroup: dataset=coco
+#
+# Applies to any COCO-format annotation file (including BDD100K converted via
+# training.datasets.bdd100k_to_coco). Split-specific YAMLs (coco_train.yaml,
+# coco_val.yaml, …) can be added later by overriding `split` and paths.
+name: coco
+split: train
+
+# Resolved against paths.data_root from configs/base.yaml.
+annotations_path: ${paths.data_root}/annotations/${dataset.split}_coco.json
+images_root: ${paths.data_root}/raw
+
+# Numeric id space is 1-indexed to match COCO convention. Phase 1-2 will pin
+# this once the final label set (BDD100K 10 + campus additions) is frozen.
+num_classes: 10

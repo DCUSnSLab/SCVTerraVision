@@ -1,0 +1,126 @@
+# CODa 59 → operational 16-class detection taxonomy.
+#
+# Approved 2026-04-22 — see docs/progress/phase1-1b_coda_adapter.md
+# ("택소노미 초안 v1 — 사용자 확인 결과") for the rationale and drop
+# reasons.
+#
+# Schema (consumed by training/datasets/coda_to_coco.py):
+#   version                : schema version for future migrations
+#   operational_classes    : list of {id, name} in COCO-style 1-indexed order
+#   coda_to_operational    : {CODa original class name → operational id}
+#                            (CODa names NOT listed here and NOT in
+#                            coda_dropped are rejected as unknown, so a CODa
+#                            taxonomy update cannot silently lose classes)
+#   coda_dropped           : CODa names treated as background (no label)
+#   bdd100k_to_operational : BDD100K 10-class → operational id
+#                            (Phase 1-2 auxiliary use, unused by this Phase)
+version: 1
+
+operational_classes:
+  - { id: 1,  name: pedestrian }
+  - { id: 2,  name: bicycle }
+  - { id: 3,  name: motorcycle }
+  - { id: 4,  name: scooter }
+  - { id: 5,  name: vehicle }
+  - { id: 6,  name: tree }
+  - { id: 7,  name: pole }
+  - { id: 8,  name: traffic_light }
+  - { id: 9,  name: sign }
+  - { id: 10, name: bollard }
+  - { id: 11, name: cone }
+  - { id: 12, name: barrier }
+  - { id: 13, name: bike_rack }
+  - { id: 14, name: bench }
+  - { id: 15, name: trash_can }
+  - { id: 16, name: fire_hydrant }
+
+coda_to_operational:
+  # 1 pedestrian
+  "Pedestrian": 1
+  # 2 bicycle
+  "Bike": 2
+  # 3 motorcycle
+  "Motorcycle": 3
+  # 4 scooter (wheeled-board group, sub-pedestrian speed)
+  "Scooter": 4
+  "Segway": 4
+  "Skateboard": 4
+  # 5 vehicle (subtype distinction has low value for a campus robot)
+  "Car": 5
+  "Truck": 5
+  "Bus": 5
+  "Pickup Truck": 5
+  "Delivery Truck": 5
+  "Service Vehicle": 5
+  "Utility Vehicle": 5
+  "Golf Cart": 5
+  # 6 tree
+  "Tree": 6
+  # 7 pole
+  "Pole": 7
+  # 8 traffic_light
+  "Traffic Light": 8
+  # 9 sign (visually similar; Phase 1 merges them, Phase 1-2c may split)
+  "Traffic Sign": 9
+  "Informational Sign": 9
+  "Room Label": 9
+  "Wall Sign": 9
+  "Floor Sign": 9
+  # 10 bollard (campus-specific, kept standalone)
+  "Bollard": 10
+  # 11 cone
+  "Cone": 11
+  # 12 barrier (linear static obstacles)
+  "Construction Barrier": 12
+  "Fence": 12
+  "Railing": 12
+  "Stanchion": 12
+  "Traffic Arm": 12
+  # 13 bike_rack
+  "Bike Rack": 13
+  # 14 bench
+  "Bench": 14
+  # 15 trash_can
+  "Trash Can": 15
+  "Dumpster": 15
+  # 16 fire_hydrant
+  "Fire Hydrant": 16
+
+coda_dropped:
+  - "Canopy"              # overhead structure, not a ground-collision target
+  - "Parking Kiosk"       # rare; collapsing into barrier caused false positives in pilot
+  - "Mailbox"             # rare
+  - "Freestanding Plant"  # handled by Phase 2 Traversability (ground texture)
+  - "Door"                # indoor-centric, low discriminative ROI
+  - "Chair"               # indoor furniture
+  - "Table"               # indoor furniture
+  - "Newspaper Dispenser" # rare
+  - "Sanitizer Dispenser" # indoor
+  - "Condiment Dispenser" # indoor
+  - "Vending Machine"     # indoor
+  - "Emergency Aid Kit"   # indoor
+  - "Fire Extinguisher"   # indoor
+  - "Computer"            # indoor
+  - "Television"          # indoor
+  - "Other"               # semantically unclear
+  - "Horse"               # single-sequence noise
+  - "Fire Alarm"          # indoor
+  - "ATM"                 # rare
+  - "Cart"                # dynamic/static context-dependent; revisit in Phase 1-2c
+  - "Couch"               # indoor
+  - "Door Switch"         # indoor
+  - "Emergency Phone"     # rare
+  - "Vacuum Cleaner"      # rare, single sequence
+  - "Water Fountain"      # rare; collision-wise fine to treat as background
+
+bdd100k_to_operational:
+  pedestrian: 1
+  rider: 1                # merged into pedestrian (low frequency, no rider class)
+  bicycle: 2
+  motorcycle: 3
+  car: 5
+  truck: 5
+  bus: 5
+  # "train" → dropped (not present on campus)
+  "traffic light": 8
+  "traffic sign": 9

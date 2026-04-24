@@ -1,0 +1,30 @@
+# Hydra subgroup: backbone=dinov3_vitb16
+#
+# Matches DinoV3BackboneConfig in models/backbone/dinov3_backbone.py.
+# Override fields on the CLI, e.g.:
+#   python -m training.train_detection backbone.freeze=false backbone.dtype=bfloat16
+#
+# License note: DINOv3 is gated. The caller's HF account must have accepted
+# the DINOv3 License and HF_TOKEN must be in env at backbone.load() time.
+# Commercial posture: research-only per 20260422_coda-primary-dataset ADR.
+name: dinov3_vitb16
+
+# HF model id. Fallback (not exported here) is DINOv2 ViT-B/14 under
+# Apache-2.0 if gated access becomes a blocker — see
+# 20260422_dinov3-backbone ADR for the switch procedure.
+model_id: facebook/dinov3-vitb16-pretrain-lvd1689m
+
+patch_size: 16
+hidden_dim: 768   # ViT-B
+
+# First-stage training freezes the backbone; Phase 1-2b's training loop
+# flips this off after N warmup epochs.
+freeze: true
+
+# float32 | float16 | bfloat16. Keep fp32 during baseline work so numerical
+# differences from mixed precision don't mask head-level bugs.
+dtype: float32
+
+# -1 = last hidden state. Phase 1-2b may add a multi-scale variant that
+# taps earlier blocks; add a separate config YAML at that point.
+output_layer: -1

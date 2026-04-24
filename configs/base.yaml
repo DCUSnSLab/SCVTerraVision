@@ -1,0 +1,38 @@
+# TerraVision — Hydra root config (Phase 0 skeleton).
+#
+# Subgroup YAMLs are added in their own phases, not here:
+#   - configs/dataset/<name>.yaml         → Phase 1-1 (coco), 1-1b (coda)
+#   - configs/backbone/<name>.yaml        → Phase 1-2a (dinov3_vitb16)
+#   - configs/detection/<name>.yaml       → Phase 1-2b (dinov3 + DETR head)
+#   - configs/tracking/<name>.yaml        → Phase 1-3
+#   - configs/pipeline/<name>.yaml        → Phase 1-4 (K / R / t / image size)
+#   - configs/traversability/<name>.yaml  → Phase 2
+#
+# `defaults` is left empty on purpose so `python -m ... --config-name base`
+# resolves to the minimal shared settings below until a subgroup is added.
+defaults:
+  - _self_
+
+project:
+  name: terravision
+  seed: 42
+
+# Paths are resolved relative to the repo root by default. Override with
+# `paths.data_root=/mnt/...` on the CLI once datasets are mounted.
+paths:
+  data_root: ${oc.env:TERRAVISION_DATA_ROOT,data}
+  output_root: ${oc.env:TERRAVISION_OUTPUT_ROOT,outputs}
+
+logging:
+  # W&B is the single experiment tracker (MLflow was dropped in Phase 0).
+  wandb:
+    enabled: false  # flip to true once WANDB_API_KEY is set
+    project: terravision
+    entity: null
+    mode: online
+
+hydra:
+  run:
+    dir: ${paths.output_root}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: false

@@ -1,0 +1,70 @@
+# Byte-compiled / optimized / cached
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# Virtual envs
+.venv/
+venv/
+env/
+.python-version
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project data & artifacts (see docs/progress/phase0.md)
+data/raw/**
+data/processed/**
+data/annotations/**
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/annotations/.gitkeep
+
+# Model checkpoints / ML outputs
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.engine
+outputs/
+runs/
+wandb/
+mlruns/
+
+# Hydra runtime
+outputs/
+.hydra/
+
+# Logs
+*.log
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment files (secrets — incl. HF_TOKEN)
+.env
+.env.*
+!.env.example
