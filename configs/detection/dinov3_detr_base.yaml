@@ -1,0 +1,82 @@
+# Hydra subgroup: detection=dinov3_detr_base
+#
+# Composes the DINOv3 ViT-B/16 backbone (Phase 1-2a) with HF's
+# DeformableDetrForObjectDetection head (ADR 20260424_detr-head-library).
+# num_feature_levels=1 because DINOv3 is single-scale stride-16; a pyramid
+# variant is deferred to Phase 1-2c.
+#
+# Example:
+#   python -m training.train_detection detection=dinov3_detr_base
+# Override a single knob:
+#   python -m training.train_detection detection.num_queries=500
+defaults:
+  - /backbone: dinov3_vitb16
+  - /dataset: coda
+  - _self_
+
+name: dinov3_detr_base
+
+# ---------------- architecture ----------------
+# num_labels must match dataset.num_classes. If you add an extra
+# background-ish class, bump this and update the taxonomy YAML together.
+num_labels: 16
+num_queries: 300
+d_model: 256
+encoder_layers: 6
+decoder_layers: 6
+encoder_attention_heads: 8
+decoder_attention_heads: 8
+encoder_ffn_dim: 1024
+decoder_ffn_dim: 1024
+dropout: 0.1
+activation_function: relu
+
+# Phase 1-2b is single-scale (see ADR). Do not raise this without also
+# introducing a pyramid shim in models/detection/detr_head.py.
+num_feature_levels: 1
+# Must match backbone output channels. ViT-B = 768; ViT-L = 1024.
+backbone_channels: 768
+
+aux_loss: true
+two_stage: false
+with_box_refine: false
+# PyTorch fallback for deformable attention. Flip to false once the CUDA
+# extension compiles on the target hardware (typically a real speedup only
+# at training time — inference is dominated by the backbone).
+disable_custom_kernels: true
+
+# Hungarian matcher + set loss coefficients (HF defaults, exposed here so
+# Phase 1-2c sweeps can override without touching code).
+class_cost: 2.0
+bbox_cost: 5.0
+giou_cost: 2.0
+bbox_loss_coefficient: 5.0
+giou_loss_coefficient: 2.0
+focal_alpha: 0.25
+
+# ---------------- training ----------------
+# Image size fed into the backbone. 1024 is a patch-16 multiple and close
+# to CODa's native 1224×1024 after a square crop. 1024×1216 rectangular is
+# a Phase 1-2c experiment.
+image_size: 1024
+
+training:
+  # Optimizer / schedule — standard DETR recipe (AdamW + cosine).
+  epochs: 50
+  batch_size: 2
+  num_workers: 4
+  optimizer: adamw
+  lr: 2.0e-4
+  lr_backbone: 2.0e-5
+  weight_decay: 1.0e-4
+  grad_clip: 0.1
+  warmup_epochs: 1
+  # Backbone is frozen for the first `freeze_backbone_epochs` epochs per
+  # the plan's "2-epoch freeze then low-LR fine-tune" policy. Set to 0 to
+  # train everything from epoch 0.
+  freeze_backbone_epochs: 2
+  # Checkpointing + eval cadence.
+  save_every_n_epochs: 5
+  eval_every_n_epochs: 1
+  # Where checkpoints land. Resolves against base.yaml's paths.output_root.
+  checkpoint_dir: ${paths.output_root}/checkpoints/dinov3_detr_base

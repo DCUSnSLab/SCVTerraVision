@@ -1,6 +1,6 @@
 # Phase 1-2a — DINOv3 백본 래퍼
 
-- **상태**: ✅ 완료·검토대기
+- **상태**: 🟢 승인완료 (2026-04-24)
 - **시작일**: 2026-04-24
 - **완료일**: 2026-04-24
 - **담당 PR**: (작성 후 링크)
@@ -65,4 +65,4 @@ Phase 1-2b (DETR 헤드 학습) · Phase 1-2c (캠퍼스 파인튠) 진입 전 b
 
 ## 사용자 검토 결과
 
-(검토 후 기입 — 승인 시 Phase 1-2b 진입, 관련 YAML 은 `configs/detection/dinov3_detr_base.yaml` 로 확장)
+- **2026-04-24 — 단계 승인 완료**: 36 pytest 녹색 · lazy-import 구조 · Hydra 서브그룹 · gated smoke 경로 확보로 사용자 승인. 실모델 forward shape 검증은 GPU 환경(Phase 1-2b 시작점) 으로 이월. Phase 1-2b (DETR 헤드) 진입 — 단, 헤드 라이브러리 선택 결정이 선행 필요 (아래 참조).

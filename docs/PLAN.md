@@ -2,7 +2,7 @@
 
 본 문서는 `/home/soobin/.claude/plans/here-is-the-approved-synthetic-iverson.md` 로 승인된 플랜의 저장소 내 사본이다. 의사결정 로그와 단계별 진행은 `docs/progress/` · `docs/decisions/` 에 분리해 기록한다.
 
-> 현재 상태: **Phase 1-2a — DINOv3 백본 래퍼** 완료·검토대기 (2026-04-24). Phase 0 · 1-1 · 1-1b 승인완료. 데이터 전략: **CODa primary · BDD100K auxiliary** — 상세 ADR: `docs/decisions/20260422_coda-primary-dataset.md`. 세부 작업 로그는 `docs/progress/phase*.md` 에서 다룬다.
+> 현재 상태: **Phase 1-2b — DETR 헤드** 1차 승인 완료 (2026-04-24, 코드·스캐폴드·테스트 52 green). 2차 게이트 — GPU 환경에서 `RUN_DINO_SMOKE=1` 단발 smoke + CODa training split 1회 학습 + mAP 수치 append — 후속 세션 대기. Phase 1-2c 는 2차 승인 완료 후 착수. Phase 0 · 1-1 · 1-1b · 1-2a 승인완료. 데이터 전략: CODa primary · BDD100K auxiliary.
 
 ---
 
@@ -16,7 +16,7 @@ Detection 모델:
 
 - 백본 = `facebook/dinov3-vitb16-pretrain-lvd1689m` (ViT-B/16, 86M)
 - 로딩 = `transformers.AutoModel.from_pretrained(...)` (HF Transformers ≥ 4.56)
-- Head = `mmdetection` 의 DINO-DETR 에 백본만 교체
+- Head = **HF Transformers `DeformableDetrForObjectDetection`** 에 백본만 DINOv3 로 교체 (원안의 mmdetection DINO-DETR 는 ADR 20260424_detr-head-library 로 대체됨)
 - 라이선스 주의: DINOv3 는 gated. `HF_TOKEN` 필요, 상용 배포 조건 별도 검토 — 상세는 `docs/decisions/20260422_dinov3-backbone.md`
 
 Tracking:
@@ -45,8 +45,8 @@ Tracking:
 | 0 | 기반 인프라 | 🟢 승인완료 | `docs/progress/phase0.md` |
 | 1-1 | 데이터 로더 (BDD 변환 + COCO 스키마) | 🟢 승인완료 | `docs/progress/phase1-1_data_loader.md` |
 | 1-1b | CODa 어댑터 (primary 데이터셋) | 🟢 승인완료 | `docs/progress/phase1-1b_coda_adapter.md` |
-| 1-2a | DINOv3 백본 래퍼 | ✅ 완료·검토대기 | `docs/progress/phase1-2a_backbone.md` |
-| 1-2b | DETR 헤드 학습 | 예정 | `docs/progress/phase1-2b_detection.md` |
+| 1-2a | DINOv3 백본 래퍼 | 🟢 승인완료 | `docs/progress/phase1-2a_backbone.md` |
+| 1-2b | DETR 헤드 학습 | ✅ 1차 승인 (2026-04-24) · 2차 대기 | `docs/progress/phase1-2b_detection.md` |
 | 1-2c | 캠퍼스 데이터 파인튠 | 예정 | `docs/progress/phase1-2c_finetune.md` |
 | 1-3 | Tracking | 예정 | `docs/progress/phase1-3_tracking.md` |
 | 1-4 | BEV projection | 예정 | `docs/progress/phase1-4_bev.md` |
