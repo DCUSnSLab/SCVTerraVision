@@ -25,7 +25,7 @@
 # 저장소 동기화
 git clone https://github.com/marsberry/SCVTerraVision.git
 cd SCVTerraVision
-git checkout <phase1-2b 브랜치명>   # 1차 승인 세션에서 작업한 브랜치
+git checkout objectdetection   # 1차 승인 세션에서 작업한 브랜치
 
 # Python 3.10+ venv
 python3 -m venv .venv
