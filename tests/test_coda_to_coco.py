@@ -311,10 +311,12 @@ def test_convert_coda_split_end_to_end(tmp_path: Path):
     assert stats.dropped_by_taxonomy == 1
     assert stats.dropped_by_occlusion == 1
 
-    # Two images with seq-prefixed file_name.
+    # Two images with seq-prefixed file_name. CODa 2023 release uses .png
+    # (older drafts assumed .jpg — kept this assertion as the canary so a
+    # future release-format flip is caught here, not at training time).
     assert [img["file_name"] for img in coco["images"]] == [
-        "seq0/2d_rect_cam0_seq0_100.jpg",
-        "seq0/2d_rect_cam0_seq0_101.jpg",
+        "seq0/2d_rect_cam0_seq0_100.png",
+        "seq0/2d_rect_cam0_seq0_101.png",
     ]
     assert all(img["width"] == 1280 and img["height"] == 720 for img in coco["images"])
 

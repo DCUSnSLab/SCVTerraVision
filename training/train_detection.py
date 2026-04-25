@@ -132,10 +132,15 @@ def preprocess_sample(
     # bogus — the coco converter already filters those, so we don't re-clip.
     boxes = coco_xywh_to_cxcywh_norm(boxes_xywh, target_size, target_size)
 
+    # COCO category_id is 1-indexed (1..num_classes); HF DETR / DeformableDetr
+    # expects 0-indexed class labels in [0, num_labels). Shift here so the
+    # matcher's `logits[:, target_ids]` indexing stays in-bounds for every
+    # class — subset training happened to not trigger this because class
+    # id=16 (fire_hydrant) was absent from sequences 0·1·2.
     return {
         "pixel_values": pixel_values,
         "pixel_mask": pixel_mask,
-        "class_labels": sample["labels"].astype(np.int64),
+        "class_labels": sample["labels"].astype(np.int64) - 1,
         "boxes": boxes.astype(np.float32),
         "image_id": int(sample["image_id"]),
     }
@@ -191,14 +196,21 @@ def build_optimizer(model: Any, cfg: Any) -> Any:
     (inside `model.model.backbone.conv_encoder.model`) and get
     `cfg.lr_backbone`. Everything else (encoder, decoder, heads,
     input_proj) gets `cfg.lr`.
+
+    Backbone params are added to the optimizer **even when initially
+    frozen** (`requires_grad=False`). The freeze schedule flips
+    `requires_grad=True` mid-training (`set_backbone_frozen(False)` at
+    `freeze_backbone_epochs`), and the optimizer must already own those
+    params for the unfrozen backbone gradients to propagate. AdamW skips
+    params with `grad is None` per step, so including frozen params here
+    is safe — they simply receive no updates while frozen.
     """
     import torch
 
     backbone_params = []
     head_params = []
     for name, p in model.named_parameters():
-        if not p.requires_grad:
-            continue
+        # Note: do NOT filter by requires_grad here. See docstring.
         if "backbone" in name:
             backbone_params.append(p)
         else:

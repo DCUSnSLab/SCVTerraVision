@@ -174,8 +174,14 @@ class DinoV3DeformableDetr:
             focal_alpha=self.head_config.focal_alpha,
             # HF tries to instantiate a ResNet backbone when this is True; we
             # replace it post-construction, so set False and let HF skip the
-            # timm path.
+            # timm path. transformers >=4.56 adds a verifier that also rejects
+            # the default backbone='resnet50' when use_timm_backbone=False
+            # (auto-populates a ResNetConfig and complains both are set), so
+            # null out the backbone string and disable the pretrained-weights
+            # download path too — the DINOv3 shim takes over at load().
             use_timm_backbone=False,
+            backbone=None,
+            use_pretrained_backbone=False,
         )
 
     def load(self) -> Any:

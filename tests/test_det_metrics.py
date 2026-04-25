@@ -134,13 +134,16 @@ def test_empty_predictions_yield_zero_map(tmp_path: Path):
 def test_offset_prediction_drops_ap_at_high_iou(tmp_path: Path):
     """Shifted box — passes AP50 but fails AP75."""
     gt_path = _make_synthetic_gt(tmp_path)
-    # GT bbox is [100,100,50,50]; predict [115,115,50,50] → IoU ≈ 0.52, above
-    # 0.5 threshold but below 0.75. AP50 stays 1.0, AP75 drops to 0.
+    # GT bbox is [100,100,50,50]; predict [107,107,50,50] (shift 7 px in x and
+    # y). Intersection 43x43 = 1849, union 2*2500 - 1849 = 3151,
+    # IoU ≈ 0.587 — above 0.5 threshold (AP50 stays 1.0) but below 0.75
+    # (AP75 drops to 0). Earlier draft used shift=15 (IoU≈0.32) which fails
+    # AP50 too and can never be above 0.5 for same-size boxes.
     preds = [
         {
             "image_id": 1,
             "category_id": 1,
-            "bbox": [115, 115, 50, 50],
+            "bbox": [107, 107, 50, 50],
             "score": 0.9,
         }
     ]

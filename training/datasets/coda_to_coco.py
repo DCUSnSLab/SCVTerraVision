@@ -40,7 +40,7 @@ import yaml
 # CODa filename templates. Hardcoded to the UT AMRL 2023 release layout. If a
 # future release renames files, update both templates AND the file_name we
 # write into the COCO JSON so `images_root / file_name` stays resolvable.
-_IMAGE_TEMPLATE = "2d_rect_cam0_{sequence}_{frame}.jpg"
+_IMAGE_TEMPLATE = "2d_rect_cam0_{sequence}_{frame}.png"
 _BBOX_TEMPLATE = "3d_bbox_os1_{sequence}_{frame}.json"
 
 DEFAULT_ALLOW_OCCLUSION: tuple[str, ...] = ("None", "Light", "Medium")
@@ -310,7 +310,11 @@ def annotations_from_frame(
             stats.dropped_by_taxonomy += 1
             continue
 
-        occl = str(entry.get("isOccluded", "Unknown"))
+        # CODa 2023 nests occlusion inside labelAttributes.isOccluded; early
+        # dumps had it flat at the top level. Check the nested path first and
+        # fall back so both revisions work.
+        label_attrs = entry.get("labelAttributes") or {}
+        occl = str(label_attrs.get("isOccluded", entry.get("isOccluded", "Unknown")))
         if occl not in allow_occlusion:
             stats.dropped_by_occlusion += 1
             continue
@@ -349,7 +353,21 @@ def frames_for_split(metadata_path: Path | str, split: str) -> list[int]:
             f"{metadata_path}: ObjectTracking.{split} not found. "
             f"Available: {sorted(ot.keys())}"
         )
-    return [int(x) for x in ot[split]]
+    entries = ot[split]
+    frames: list[int] = []
+    for entry in entries:
+        # CODa 2023 ships these as 3d_bbox JSON paths
+        # ("3d_bbox/os1/{seq}/3d_bbox_os1_{seq}_{frame}.json"), not raw ints.
+        # Accept both forms so the converter keeps working if the release
+        # format switches to plain ints.
+        if isinstance(entry, int):
+            frames.append(entry)
+        else:
+            stem = Path(str(entry)).stem  # 3d_bbox_os1_{seq}_{frame}
+            frames.append(int(stem.rsplit("_", 1)[-1]))
+    # CODa metadata lists are unordered — sort so dataset order is deterministic
+    # across runs (matters for eval reproducibility).
+    return sorted(set(frames))
 
 
 def convert_coda_split(
@@ -409,7 +427,13 @@ def convert_coda_split(
             if not bbox_path.exists():
                 continue
             with bbox_path.open("r", encoding="utf-8") as f:
-                frame_anns = json.load(f).get("3dannotations", [])
+                # CODa 2023 releases use key "3dbbox"; earlier revisions used
+                # "3dannotations". Accept either so a future key rename (or a
+                # backported dump) is not silently empty.
+                _frame_data = json.load(f)
+                frame_anns = _frame_data.get("3dbbox") or _frame_data.get(
+                    "3dannotations", []
+                )
 
             for cat_id, xywh in annotations_from_frame(
                 frame_anns,
