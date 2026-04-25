@@ -3,17 +3,31 @@
 Scope (Phase 1-2b): plain PyTorch loop on top of `DinoV3DeformableDetr`,
 without HF Trainer (opacity + distributed/logging coupling we don't want
 during education/debugging — see ADR 20260424_detr-head-library, §편차).
+This module supports both single-GPU (default) and DDP (multi-GPU via
+`torchrun`) by sniffing the LOCAL_RANK / RANK / WORLD_SIZE env vars that
+torchrun injects.
 
 torch / transformers / pycocotools are imported lazily inside `main()` so
 this module collects cleanly in the torch-less dev env (e.g. `pytest`
 collects `tests/test_detr_head.py` without attempting to import this file
 end-to-end).
 
-Typical invocation (in the GPU env):
+Single-GPU invocation (the default — used by Phase 1-2b runbook):
     HF_TOKEN=hf_... python -m training.train_detection \
-        detection=dinov3_detr_base \
-        dataset.split=training \
+        +detection=dinov3_detr_base \
+        +dataset=coda \
+        +backbone=dinov3_vitb16 \
         detection.training.epochs=50
+
+Multi-GPU DDP invocation (this branch's addition; per-GPU batch_size
+should stay safe on 24GB cards — bs=4/GPU was validated for ViT-B/1024²):
+    CUDA_VISIBLE_DEVICES=0,3 HF_TOKEN=hf_... torchrun \\
+        --standalone --nproc_per_node=2 \\
+        -m training.train_detection \\
+        +detection=dinov3_detr_base \\
+        +dataset=coda \\
+        +backbone=dinov3_vitb16 \\
+        detection.training.batch_size=4
 
 Override knobs on the CLI:
     detection.training.lr=1e-4
@@ -253,9 +267,56 @@ def set_backbone_frozen(model: Any, frozen: bool) -> None:
     """Toggle requires_grad on the DINOv3 backbone inside the HF model."""
     # The shim exposes the DINOv3 module as `shim.model` (see
     # models/detection/detr_head.py:_build_conv_encoder_shim).
-    conv_encoder = model.model.backbone.conv_encoder
+    # Unwrap DDP if present — `model.module.model.backbone...` would also
+    # work but `_unwrap` is what callers use elsewhere too.
+    inner = _unwrap(model)
+    conv_encoder = inner.model.backbone.conv_encoder
     for p in conv_encoder.model.parameters():
         p.requires_grad_(not frozen)
+
+
+# --------------------------------------------------------------------------
+# Distributed (DDP) helpers
+# --------------------------------------------------------------------------
+
+
+def _setup_distributed() -> dict[str, int] | None:
+    """Initialize NCCL process group when launched via `torchrun`.
+
+    Returns a dict with `local_rank`, `rank`, `world_size` if running under
+    torchrun, else None (single-GPU mode). Sets the per-rank CUDA device so
+    later `.to(device)` calls land on the right card.
+    """
+    if "LOCAL_RANK" not in os.environ:
+        return None
+    import torch
+    import torch.distributed as dist
+
+    local_rank = int(os.environ["LOCAL_RANK"])
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend="nccl", init_method="env://")
+    return {"local_rank": local_rank, "rank": rank, "world_size": world_size}
+
+
+def _is_main(dist_info: dict[str, int] | None) -> bool:
+    """Rank 0 (or single-process) is the only one that logs / saves."""
+    return dist_info is None or dist_info["rank"] == 0
+
+
+def _unwrap(model: Any) -> Any:
+    """Return the underlying module behind DistributedDataParallel."""
+    return model.module if hasattr(model, "module") else model
+
+
+def _cleanup_distributed(dist_info: dict[str, int] | None) -> None:
+    if dist_info is None:
+        return
+    import torch.distributed as dist
+
+    if dist.is_initialized():
+        dist.destroy_process_group()
 
 
 # --------------------------------------------------------------------------
@@ -294,35 +355,65 @@ def _wandb_init(cfg: Any) -> Any:
 
 
 def main(cfg: Any) -> None:
-    """Entry point — invoked by Hydra."""
+    """Entry point — invoked by Hydra. DDP-aware via torchrun env vars."""
     _ensure_ml_deps()
 
     import torch
-    from torch.utils.data import DataLoader
+    import torch.nn as nn
+    from torch.utils.data import DataLoader, DistributedSampler
 
     from models.backbone.dinov3_backbone import DinoV3BackboneConfig
     from models.detection.detr_head import DetrHeadConfig, DinoV3DeformableDetr
     from training.datasets.coco_loader import CocoDetectionDataset
+
+    dist_info = _setup_distributed()
+    is_main = _is_main(dist_info)
 
     # ---- Build dataset ----
     dataset = CocoDetectionDataset(
         annotation_path=cfg.dataset.annotations_path,
         images_root=cfg.dataset.images_root,
     )
-    LOG.info(
-        "dataset: %d images, %d annotations",
-        len(dataset),
-        sum(len(v) for v in dataset.index.annotations_by_image.values()),
-    )
+    if is_main:
+        LOG.info(
+            "dataset: %d images, %d annotations",
+            len(dataset),
+            sum(len(v) for v in dataset.index.annotations_by_image.values()),
+        )
+        if dist_info is not None:
+            LOG.info(
+                "ddp: world_size=%d, local_rank=%d",
+                dist_info["world_size"],
+                dist_info["local_rank"],
+            )
 
-    loader = DataLoader(
-        dataset,  # type: ignore[arg-type]
-        batch_size=cfg.detection.training.batch_size,
-        shuffle=True,
-        num_workers=cfg.detection.training.num_workers,
-        collate_fn=make_collate_fn(cfg.detection.image_size),
-        pin_memory=True,
-    )
+    if dist_info is not None:
+        sampler = DistributedSampler(
+            dataset,  # type: ignore[arg-type]
+            num_replicas=dist_info["world_size"],
+            rank=dist_info["rank"],
+            shuffle=True,
+            drop_last=False,
+        )
+        # `shuffle=True` on the loader is mutually exclusive with a sampler.
+        loader = DataLoader(
+            dataset,  # type: ignore[arg-type]
+            batch_size=cfg.detection.training.batch_size,
+            sampler=sampler,
+            num_workers=cfg.detection.training.num_workers,
+            collate_fn=make_collate_fn(cfg.detection.image_size),
+            pin_memory=True,
+        )
+    else:
+        sampler = None
+        loader = DataLoader(
+            dataset,  # type: ignore[arg-type]
+            batch_size=cfg.detection.training.batch_size,
+            shuffle=True,
+            num_workers=cfg.detection.training.num_workers,
+            collate_fn=make_collate_fn(cfg.detection.image_size),
+            pin_memory=True,
+        )
 
     # ---- Build model ----
     backbone_cfg = DinoV3BackboneConfig(
@@ -364,9 +455,29 @@ def main(cfg: Any) -> None:
     wrapper = DinoV3DeformableDetr(head_config=head_cfg, backbone_config=backbone_cfg)
     model = wrapper.load()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if dist_info is not None:
+        device = torch.device(f"cuda:{dist_info['local_rank']}")
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    LOG.info("device: %s", device)
+    if is_main:
+        LOG.info("device: %s", device)
+
+    # Wrap in DDP after device placement, before optimizer build (DDP must own
+    # the params the optimizer references). The 1-epoch subset smoke confirmed
+    # all parameters get gradients on every step (no aux-loss flow-control
+    # branches leaving params unused), so `find_unused_parameters=False` —
+    # avoids the extra autograd-graph traversal that costs ~5% throughput.
+    # Flip to True if a future config (two_stage / with_box_refine / multi-
+    # scale pyramid) introduces conditionally-used params and DDP errors with
+    # "Expected to mark a variable ready only once".
+    if dist_info is not None:
+        model = nn.parallel.DistributedDataParallel(
+            model,
+            device_ids=[dist_info["local_rank"]],
+            output_device=dist_info["local_rank"],
+            find_unused_parameters=False,
+        )
 
     # ---- Optimizer / schedule ----
     opt = build_optimizer(model, cfg.detection.training)
@@ -378,18 +489,28 @@ def main(cfg: Any) -> None:
     if cfg.detection.training.freeze_backbone_epochs > 0:
         set_backbone_frozen(model, True)
 
-    # ---- Logging ----
-    run = _wandb_init(cfg)
+    # ---- Logging (rank 0 only) ----
+    run = _wandb_init(cfg) if is_main else None
 
-    # ---- Checkpoints ----
+    # ---- Checkpoints (rank 0 only creates directory) ----
     ckpt_dir = Path(cfg.detection.training.checkpoint_dir)
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    if is_main:
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- Train ----
+    import torch.distributed as dist
+
     global_step = 0
     for epoch in range(cfg.detection.training.epochs):
+        # DistributedSampler requires per-epoch seeding for shuffling to be
+        # deterministic across ranks (and unique per epoch). Skipped in the
+        # single-GPU path because the regular shuffle=True handles it.
+        if sampler is not None:
+            sampler.set_epoch(epoch)
+
         if epoch == cfg.detection.training.freeze_backbone_epochs:
-            LOG.info("epoch %d: unfreezing backbone", epoch)
+            if is_main:
+                LOG.info("epoch %d: unfreezing backbone", epoch)
             set_backbone_frozen(model, False)
 
         model.train()
@@ -415,7 +536,7 @@ def main(cfg: Any) -> None:
             opt.step()
             sched.step()
 
-            if global_step % 50 == 0:
+            if is_main and global_step % 50 == 0:
                 LOG.info(
                     "epoch %d step %d loss %.4f", epoch, global_step, float(loss)
                 )
@@ -431,20 +552,29 @@ def main(cfg: Any) -> None:
             global_step += 1
 
         if (epoch + 1) % cfg.detection.training.save_every_n_epochs == 0:
-            ckpt_path = ckpt_dir / f"epoch_{epoch + 1:03d}.pt"
-            torch.save(
-                {
-                    "epoch": epoch + 1,
-                    "model_state": model.state_dict(),
-                    "optimizer_state": opt.state_dict(),
-                    "scheduler_state": sched.state_dict(),
-                },
-                ckpt_path,
-            )
-            LOG.info("saved checkpoint: %s", ckpt_path)
+            # Save state_dict from the unwrapped module so the checkpoint is
+            # identical whether we trained single-GPU or DDP — eval/resume
+            # code can load without caring about a "module." prefix.
+            if is_main:
+                ckpt_path = ckpt_dir / f"epoch_{epoch + 1:03d}.pt"
+                torch.save(
+                    {
+                        "epoch": epoch + 1,
+                        "model_state": _unwrap(model).state_dict(),
+                        "optimizer_state": opt.state_dict(),
+                        "scheduler_state": sched.state_dict(),
+                    },
+                    ckpt_path,
+                )
+                LOG.info("saved checkpoint: %s", ckpt_path)
+            # Barrier so non-main ranks don't race ahead while main is still
+            # writing the file (matters mostly for very fast next epoch).
+            if dist_info is not None and dist.is_initialized():
+                dist.barrier()
 
     if run is not None:
         run.finish()
+    _cleanup_distributed(dist_info)
 
 
 def _cli() -> None:
