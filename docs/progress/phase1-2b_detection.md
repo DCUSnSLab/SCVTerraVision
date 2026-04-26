@@ -172,4 +172,28 @@ DINOv3 백본(Phase 1-2a) 위에 DETR-style detection 헤드를 올려 공개 �
 ## 사용자 검토 결과
 
 - **2026-04-24 — 1차 리뷰 승인**: 코드 구조 · Hydra config · lazy-import · 52 pytest green (8 gated skip) · HF DeformableDetr 어댑터 구조 수용. 2차 게이트 (GPU 환경 `RUN_DINO_SMOKE=1` smoke + CODa training split 1회 학습 + mAP 수치) 는 후속 세션에서 진행 후 본 섹션에 append. 최종 승인 전까지는 Phase 1-2c 착수 보류.
-- **2026-04-XX — 2차 리뷰**: (후속 — GPU 환경에서 실학습 실행 후 수치 append)
+- **2026-04-26 — 2차 리뷰 (베이스라인 수치 확정)**: 단일 GPU 1차 시도(8.5h)에서 발견한 optimizer-backbone 결함 fix 적용 후 DDP 3-GPU(GPU0-2, GPU3 은 eval daemon 전용) 로 full 50-epoch 학습 21h 완료. epoch_005 ~ epoch_050 의 10 ckpt 별 validation 결과:
+
+  | epoch | mAP@[.50:.95] | AP50 | AP75 | AR_100 |
+  |-------|---------------|------|------|--------|
+  | 5 | 0.168 | 0.387 | 0.122 | 0.388 |
+  | 10 | 0.336 | 0.675 | 0.305 | 0.516 |
+  | 25 | 0.514 | 0.876 | 0.546 | 0.655 |
+  | 50 | **0.623** | **0.925** | **0.700** | **0.730** |
+
+  학습 W&B run: [electric-brook-8 (vjyi7py0)](https://wandb.ai/j-soobin-daegu/terravision/runs/vjyi7py0). 평가 daemon W&B run: [electric-brook-8-eval (9167nmko)](https://wandb.ai/j-soobin-daegu/terravision/runs/9167nmko). 최종 ckpt `outputs/checkpoints/dinov3_detr_base_full/epoch_050.pt` (1.15 GB; optimizer state 가 backbone params 도 포함).
+
+  Per-class AP @[.50:.95] (epoch_050):
+  - 양호: vehicle=0.752, barrier=0.725, pole=0.722, tree=0.699, bench=0.697, trash_can=0.657
+  - 중간: pedestrian=0.648, scooter=0.645, bicycle=0.639, sign=0.618, bollard=0.616, bike_rack=0.605
+  - 하위: motorcycle=0.518, cone=0.505, traffic_light=0.470, fire_hydrant=0.455 (소형 객체 + 데이터 희소)
+
+  **인프라/설정 차이 기록 (1차 plan 대비)**:
+  - 학습 라이브러리: `transformers==4.56.2`, `torch==2.3.1+cu121` 로 pin
+  - GPU: RTX 4090 × 3 (DDP, GPU0-2), eval 전용 RTX 4090 × 1 (GPU3, polling daemon)
+  - Effective batch=12 (bs=4/GPU × 3 ranks). LR 은 baseline `lr=2e-4` 유지 (DETR LR 민감성 고려, scaling 미적용)
+  - 1 step ≈ 3 ranks 동시 forward+backward+all-reduce. NCCL backend, find_unused_parameters=False (smoke 에서 모든 params 사용 확인)
+  - DDP scaffold 는 별도 `ddp-training` 브랜치로 유지 — Phase 1-2b 의 "explicit single-GPU loop" 원칙(ADR 20260424) 과의 정합성을 위해 단일-GPU 베이스 (`objectdetection` 브랜치) 도 보존
+  - 평가 파이프라인: 학습 중 `scripts/eval_daemon.py` 가 `save_every_n_epochs=5` 와 정확히 동기화되어 매 ckpt 즉시 평가, 같은 W&B 프로젝트의 별도 run 으로 epoch 축으로 로깅
+
+  **2차 승인 의견**: mAP=0.623, AP50=0.925 는 캠퍼스 환경 단일 카메라 16-class detection 베이스라인으로 충분. 수렴 곡선 단조 증가 후 epoch 45-50 plateau (0.621 → 0.623) — 더 긴 학습은 한계 효용 작음. AP_small=0.35 vs AP_large=0.74 의 2x 격차는 single-scale ViT stride-16 의 구조적 한계로 예상된 결과 — Phase 1-2c 에서 multi-scale pyramid 또는 작은 객체에 보강 데이터 도입 검토. **Phase 1-2b 종결 → Phase 1-2c (캠퍼스 데이터 파인튠) 착수 가능**.

@@ -18,7 +18,7 @@
 | 1-1 | 데이터 로더 (COCO / BDD100K) | 🟢 승인완료 (2026-04-22) | [phase1-1_data_loader.md](phase1-1_data_loader.md) | COCO 단일 스키마 + BDD100K → auxiliary 로 downgrade |
 | 1-1b | CODa 어댑터 (primary) | 🟢 승인완료 (2026-04-24) | [phase1-1b_coda_adapter.md](phase1-1b_coda_adapter.md) | 3D→2D 투영 + 16-class 택소노미 확정 · 18 pytest green · ADR: 20260422_coda-primary-dataset |
 | 1-2a | DINOv3 백본 래퍼 | 🟢 승인완료 (2026-04-24) | [phase1-2a_backbone.md](phase1-2a_backbone.md) | HF AutoModel lazy-load + patch grid · 36 pytest green (3 gated skip) |
-| 1-2b | DETR head 학습 | ✅ 1차 승인 (2026-04-24) · ⏳ 2차 (GPU 실학습 mAP) | [phase1-2b_detection.md](phase1-2b_detection.md) | 52 pytest green (8 gated skip) · HF DeformableDetr 어댑터 + CODa Hydra config + train/eval 루프 · 2차 smoke: `RUN_DINO_SMOKE=1 HF_TOKEN=... pytest` + `python -m training.train_detection` |
+| 1-2b | DETR head 학습 | 🟢 승인완료 (2026-04-26) | [phase1-2b_detection.md](phase1-2b_detection.md) | CODa training 50-epoch DDP(GPU0-2) + GPU3 eval daemon · **mAP=0.623, AP50=0.925** (epoch_050) · optimizer-backbone fix + label shift + transformers 4.56 호환 + CODa 변환기 4 fix · 단일 GPU 백업 브랜치 `objectdetection`, DDP 실행 브랜치 `ddp-training` |
 | 1-2c | 캠퍼스 데이터 파인튠 | ⚪ 예정 | — | CODa primary + 자체 촬영 |
 | 1-3 | Tracking (ByteTrack) | ⚪ 예정 | — | boxmot 사용 |
 | 1-4 | BEV projection | ⚪ 예정 | — | 1-4a 캘리브 → 1-4b IPM → 1-4c 제어 인터페이스 |
