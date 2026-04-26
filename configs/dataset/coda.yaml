@@ -1,0 +1,43 @@
+# Hydra subgroup: dataset=coda
+#
+# CODa = UT Campus Object Dataset (UT AMRL, 2023).
+# License: CC BY-NC-SA 4.0 + UT Non-Commercial Agreement (Oct 2023).
+# Research-only use per docs/decisions/20260422_coda-primary-dataset.md.
+# If the commercialization posture ever changes, revisit that ADR before
+# using the trained weights beyond the research scope.
+#
+# The converter (training/datasets/coda_to_coco.py) reads CODa's 3D box
+# annotations from <coda_root>/3d_bbox/os1/<SEQ>/*.json, projects them to
+# cam0 image space using the per-sequence calibration YAMLs under
+# <coda_root>/calibrations/<SEQ>/, applies the filters below, and emits a
+# COCO-format JSON compatible with Phase 1-1's CocoDetectionDataset.
+name: coda
+split: training  # CODa splits: training | validation | testing
+
+coda_root: ${paths.data_root}/raw/coda
+images_root: ${dataset.coda_root}/2d_rect/cam0
+annotations_path: ${paths.data_root}/annotations/coda_${dataset.split}_coco.json
+
+# Taxonomy lives in a sibling YAML so it can be loaded independently by the
+# converter CLI and by downstream training code (Phase 1-2).
+taxonomy_path: configs/dataset/coda_taxonomy.yaml
+
+num_classes: 16
+
+# Filter defaults. Tune in Phase 1-1b after visual verification on a real
+# sequence; per-split overrides go in a split-specific YAML.
+filters:
+  # Reject boxes smaller than this (pixels²) after clipping to image bounds.
+  # 64 px² ≈ 8×8, below DETR's reliable detection range.
+  min_area: 64.0
+  # Require at least this many of the 8 projected 3D corners to land inside
+  # the image. Too strict drops partially occluded objects; too loose admits
+  # off-frame projections. 2 keeps side-entering pedestrians while rejecting
+  # boxes that are >75% clipped.
+  min_visible_corners: 2
+  # CODa's isOccluded levels we keep. {Heavy, Full, Unknown} drop by default.
+  allow_occlusion: [None, Light, Medium]
+
+# Which CODa camera streams to export. cam0 is rectified front RGB; Phase
+# 1-1b exports cam0 only. cam1 (stereo pair) added in Phase 1-2c if useful.
+cameras: [cam0]
