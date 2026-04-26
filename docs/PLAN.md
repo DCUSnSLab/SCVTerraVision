@@ -47,7 +47,7 @@ Tracking:
 | 1-1b | CODa 어댑터 (primary 데이터셋) | 🟢 승인완료 | `docs/progress/phase1-1b_coda_adapter.md` |
 | 1-2a | DINOv3 백본 래퍼 | 🟢 승인완료 | `docs/progress/phase1-2a_backbone.md` |
 | 1-2b | DETR 헤드 학습 | 🟢 승인완료 (2026-04-26) | `docs/progress/phase1-2b_detection.md` |
-| 1-2c | 캠퍼스 데이터 파인튠 | 예정 | `docs/progress/phase1-2c_finetune.md` |
+| 1-2c | 캠퍼스 데이터 파인튠 | ⏳ 착수 대기 | `docs/progress/phase1-2c_finetune.md` |
 | 1-3 | Tracking | 예정 | `docs/progress/phase1-3_tracking.md` |
 | 1-4 | BEV projection | 예정 | `docs/progress/phase1-4_bev.md` |
 | 1-5 | 통합 · 최적화 | 예정 | `docs/progress/phase1-5_integration.md` |
