@@ -2,7 +2,9 @@
 
 본 문서는 `/home/soobin/.claude/plans/here-is-the-approved-synthetic-iverson.md` 로 승인된 플랜의 저장소 내 사본이다. 의사결정 로그와 단계별 진행은 `docs/progress/` · `docs/decisions/` 에 분리해 기록한다.
 
-> 현재 상태: **Phase 1-2b — DETR 헤드** 2차 승인 완료 (2026-04-26). CODa training 50-epoch DDP(GPU0-2) 학습 + GPU3 eval daemon → epoch_050 베이스라인 **mAP=0.623, AP50=0.925** 확정. 1차 시도(8.5h)에서 발견한 optimizer-backbone 결함을 fix 후 21h 학습. Phase 1-2c (캠퍼스 데이터 파인튠) 착수 가능. Phase 0 · 1-1 · 1-1b · 1-2a · 1-2b 승인완료. 데이터 전략: CODa primary · BDD100K auxiliary.
+> 현재 상태: **Phase 1-3 — YOLO26 fine-tune baseline** 코드 작성 완료 (2026-04-28), 학습 미실행. Detection 라인을 DINOv3+Deformable DETR 에서 Ultralytics YOLO26 으로 전환 (ADR `20260428_pivot-to-yolo26.md`) — AP_small 약점(0.35) 과 edge 배포 비용 대응 목적. 91-class 통합 head (COCO80 + CoDA 신규 11), n→s→m→l 4단계 게이트. 기존 Phase 1-2c (DETR 캠퍼스 파인튠) 는 ⛔ Closed.
+>
+> 이전 베이스라인: Phase 1-2b DINOv3+DETR mAP=0.623, AP50=0.925 (epoch_050) — 체크포인트 `outputs/checkpoints/dinov3_detr_base_full/` 에 보존. Phase 0 · 1-1 · 1-1b · 1-2a · 1-2b 승인완료. 데이터 전략: CODa primary · BDD100K auxiliary.
 
 ---
 
@@ -12,12 +14,17 @@
 - **Phase 2**: Traversability (= Freespace / Drivable Area) 인지
 - **Phase 3**: 멀티 카메라 · 온보드 TensorRT 배포
 
-Detection 모델:
+Detection 모델 (Phase 1-3 부터):
 
-- 백본 = `facebook/dinov3-vitb16-pretrain-lvd1689m` (ViT-B/16, 86M)
-- 로딩 = `transformers.AutoModel.from_pretrained(...)` (HF Transformers ≥ 4.56)
-- Head = **HF Transformers `DeformableDetrForObjectDetection`** 에 백본만 DINOv3 로 교체 (원안의 mmdetection DINO-DETR 는 ADR 20260424_detr-head-library 로 대체됨)
-- 라이선스 주의: DINOv3 는 gated. `HF_TOKEN` 필요, 상용 배포 조건 별도 검토 — 상세는 `docs/decisions/20260422_dinov3-backbone.md`
+- **모델 = Ultralytics YOLO26** (n/s/m/l/x). Phase 1-3 은 n→s→m→l 4단계 순차 fine-tune.
+- 사전학습 가중치 = `yolo26{n,s,m,l}.pt` (COCO80 pretrain, ultralytics 자동 다운로드)
+- Head = 91-class 통합 (COCO80 0..79 + CoDA 신규 11 80..90; vehicle dispatch 적용 — ADR `20260428_pivot-to-yolo26.md`)
+- 라이선스 주의: ultralytics 는 **AGPL-3.0** — 상용 배포 시 소스 공개 의무 또는 상용 라이선스 필요. 상세는 `docs/decisions/20260428_pivot-to-yolo26.md`.
+
+Detection 모델 (Phase 1-2b, 보존됨 — 재학습 안 함):
+
+- 백본 = `facebook/dinov3-vitb16-pretrain-lvd1689m` (ViT-B/16, 86M) · Head = HF Deformable DETR
+- 체크포인트 `outputs/checkpoints/dinov3_detr_base_full/epoch_050.pt` 보존, Phase 2 segmentation 백본 재활용 가능성 유지.
 
 Tracking:
 
@@ -47,10 +54,11 @@ Tracking:
 | 1-1b | CODa 어댑터 (primary 데이터셋) | 🟢 승인완료 | `docs/progress/phase1-1b_coda_adapter.md` |
 | 1-2a | DINOv3 백본 래퍼 | 🟢 승인완료 | `docs/progress/phase1-2a_backbone.md` |
 | 1-2b | DETR 헤드 학습 | 🟢 승인완료 (2026-04-26) | `docs/progress/phase1-2b_detection.md` |
-| 1-2c | 캠퍼스 데이터 파인튠 | ⏳ 착수 대기 | `docs/progress/phase1-2c_finetune.md` |
-| 1-3 | Tracking | 예정 | `docs/progress/phase1-3_tracking.md` |
-| 1-4 | BEV projection | 예정 | `docs/progress/phase1-4_bev.md` |
-| 1-5 | 통합 · 최적화 | 예정 | `docs/progress/phase1-5_integration.md` |
+| 1-2c | 캠퍼스 데이터 파인튠 (DETR) | ⛔ Closed (2026-04-28, superseded by 1-3) | `docs/progress/phase1-2c_finetune.md` |
+| 1-3 | YOLO26 fine-tune baseline | ⏳ 코드 작성 완료, 학습 미실행 | `docs/progress/phase1-3_yolo26.md` |
+| 1-4 | Tracking | 예정 | `docs/progress/phase1-4_tracking.md` |
+| 1-5 | BEV projection | 예정 | `docs/progress/phase1-5_bev.md` |
+| 1-6 | 통합 · 최적화 | 예정 | `docs/progress/phase1-6_integration.md` |
 | 2 | Traversability | 예정 | `docs/progress/phase2_traversability.md` |
 | 3 | 멀티캠 · 온보드 | 예정 | `docs/progress/phase3_multicam_onboard.md` |
 
@@ -60,10 +68,9 @@ Tracking:
 
 ```mermaid
 flowchart LR
-    CAM[Front Camera<br/>RGB frame] --> PRE[Preproc<br/>undistort + resize]
-    PRE --> BB[DINOv3 ViT-B/16<br/>backbone via HF Transformers]
-    BB --> HEAD[DETR Head<br/>Hungarian matcher]
-    HEAD --> DET["Detections<br/>bbox + class + score"]
+    CAM[Front Camera<br/>RGB frame] --> PRE[Preproc<br/>letterbox 640]
+    PRE --> YOLO[YOLO26<br/>n/s/m/l fine-tuned on CoDA<br/>91-class head]
+    YOLO --> DET["Detections<br/>bbox + class + score"]
     DET --> TRK[ByteTrack / OC-SORT<br/>via boxmot]
     TRK --> TRKOUT["Tracked bbox<br/>+ track_id"]
     TRKOUT --> FOOT[Ground-contact<br/>point extractor]

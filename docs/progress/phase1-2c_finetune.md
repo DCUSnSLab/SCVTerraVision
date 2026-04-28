@@ -1,10 +1,24 @@
-# Phase 1-2c — 캠퍼스 데이터 파인튠
+# Phase 1-2c — 캠퍼스 데이터 파인튠 ⛔ Closed
 
-- **상태**: ⏳ 착수 대기 (열린 질문 해소 후 진행)
+> **Status (2026-04-28)**: ⛔ **Closed — superseded by Phase 1-3 (YOLO26 fine-tune).**
+> Detection 라인을 DINOv3+Deformable DETR 에서 Ultralytics YOLO26 으로 전환하기로 결정함에 따라
+> 본 단계의 "DETR 출발점 + 캠퍼스 파인튠" 계획은 폐기되었다. AP_small 약점 대응과 edge
+> 배포 비용 문제는 [`docs/decisions/20260428_pivot-to-yolo26.md`](../decisions/20260428_pivot-to-yolo26.md)
+> 와 [`phase1-3_yolo26.md`](phase1-3_yolo26.md) 에서 다룬다.
+>
+> **보존**: 1-2b 체크포인트 `outputs/checkpoints/dinov3_detr_base_full/epoch_050.pt` 와
+> 학습 코드(`training/train_detection.py`, `models/{backbone,detection}/*`) 는 재현/재평가
+> 가능성을 위해 그대로 둔다. Phase 2 Traversability Segmentation 에서 DINOv3 백본을 재활용할 수 있다.
+>
+> **열린 질문 5건은 본 문서에서 더 이상 추적하지 않는다** (캠퍼스 데이터 수집 일정·라벨링
+> 도구 등은 1-3 통과 후 새 phase 파일에서 재정의 예정).
+
+- **상태**: ⛔ Closed (2026-04-28)
 - **시작일**: —
-- **완료일**: —
+- **완료일**: — (폐기)
 - **담당 PR**: (작성 후 링크)
 - **선행 단계**: Phase 1-2b 🟢 승인완료 (2026-04-26, mAP=0.623, AP50=0.925 @ epoch_050)
+- **승계 단계**: [Phase 1-3 — YOLO26 fine-tune](phase1-3_yolo26.md)
 
 ## 목표
 

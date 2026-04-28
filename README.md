@@ -42,10 +42,9 @@ Phase 1 은 **전면 단일 카메라 → Detection → Tracking → BEV 좌표*
 
 ```mermaid
 flowchart LR
-    CAM[Front Camera<br/>RGB frame] --> PRE[Preproc<br/>undistort + resize]
-    PRE --> BB[DINOv3 ViT-B/16<br/>backbone via HF Transformers]
-    BB --> HEAD[DETR Head<br/>Hungarian matcher]
-    HEAD --> DET["Detections<br/>bbox + class + score"]
+    CAM[Front Camera<br/>RGB frame] --> PRE[Preproc<br/>letterbox 640]
+    PRE --> YOLO[YOLO26<br/>n/s/m/l fine-tuned on CoDA<br/>91-class head]
+    YOLO --> DET["Detections<br/>bbox + class + score"]
     DET --> TRK[ByteTrack / OC-SORT<br/>via boxmot]
     TRK --> TRKOUT["Tracked bbox<br/>+ track_id"]
     TRKOUT --> FOOT[Ground-contact<br/>point extractor]
@@ -53,7 +52,8 @@ flowchart LR
     FOOT --> IPM[Flat-ground IPM<br/>cv2.warpPerspective]
     IPM --> OUT["Control msg<br/>{track_id, class, x_m, y_m,<br/>vx, vy, conf, t}"]
     OUT --> CTRL[Control team<br/>ROS2 or TCP-JSON]
-    BB -. Phase 2 .-> SEG[Traversability head<br/>Mask2Former / SegFormer]
+    PRE -. Phase 2 .-> DINO[DINOv3 ViT-B/16<br/>backbone, segmentation]
+    DINO -. Phase 2 .-> SEG[Traversability head<br/>Mask2Former / SegFormer]
     SEG -. Phase 2 .-> FUSE[Fusion & Decision]
     OUT --> FUSE
 ```
@@ -78,14 +78,15 @@ flowchart LR
 
 | 구분 | 기술 |
 |------|------|
-| Backbone | DINOv3 ViT-B/16 (gated, HF Transformers) · 폴백: DINOv2 ViT-B/14 (Apache-2.0) |
-| Detection Head | mmdetection DINO-DETR (백본만 교체) |
+| Detection (Phase 1-3 부터) | **Ultralytics YOLO26** (n/s/m/l/x) · 91-class 통합 head (COCO80+CoDA 11) · AGPL-3.0 |
+| Backbone (Phase 2 segmentation) | DINOv3 ViT-B/16 (gated, HF Transformers) · 폴백: DINOv2 ViT-B/14 (Apache-2.0) |
+| Detection (Phase 1-2b, 보존) | DINOv3 ViT-B/16 + HF Deformable DETR — 체크포인트 보존, 신규 학습 없음 |
 | Tracking | `boxmot` — ByteTrack / OC-SORT |
 | BEV Projection | OpenCV `calibrateCamera` + `warpPerspective` (flat-ground IPM) |
 | Traversability | Mask2Former / SegFormer 기반 (Phase 2) |
 | Framework | PyTorch |
 | 추론 최적화 | TensorRT / ONNX Runtime (Phase 3) |
-| 데이터 관리 | CVAT, COCO JSON 통일 |
+| 데이터 관리 | CVAT, COCO JSON · YOLO txt 변환 (`training/datasets/coda_to_yolo.py`) |
 | 실험 관리 | Weights & Biases |
 | 설정 관리 | Hydra + OmegaConf |
 
@@ -130,11 +131,15 @@ terravision/
 - [ ] 디렉토리 네이밍 정리 (`segmentation/` → `traversability/`)
 
 ### Phase 1 — Object Perception 파이프라인 (전면 단일 카메라)
-- [ ] 1-1 데이터 로더 — COCO JSON 통일, BDD100K → COCO 변환
-- [ ] 1-2 Detection — DINOv3 백본 래퍼 + DETR head 학습 + 캠퍼스 파인튠
-- [ ] 1-3 Tracking — `boxmot` ByteTrack 연결, MOTA/IDF1 평가
-- [ ] 1-4 BEV Projection — 캘리브레이션 + flat-ground IPM + 제어부 인터페이스
-- [ ] 1-5 통합·최적화 — `inference/pipeline.py`, 목표 ≥15 FPS @ 1280×720
+- [x] 1-1 데이터 로더 — COCO JSON 통일, BDD100K → COCO 변환
+- [x] 1-1b CODa primary 어댑터 (3D→2D 투영)
+- [x] 1-2a DINOv3 백본 래퍼
+- [x] 1-2b DETR head 학습 — 베이스라인 mAP=0.623 / AP50=0.925 (보존, 재학습 없음)
+- [⛔] 1-2c 캠퍼스 데이터 파인튠 (DETR) — Closed, Phase 1-3 으로 대체
+- [ ] **1-3 YOLO26 fine-tune baseline** — n→s→m→l 4단계, 91-class 통합 head, 목표 mAP≥0.65 / AP_small≥0.52
+- [ ] 1-4 Tracking — `boxmot` ByteTrack 연결, MOTA/IDF1 평가
+- [ ] 1-5 BEV Projection — 캘리브레이션 + flat-ground IPM + 제어부 인터페이스
+- [ ] 1-6 통합·최적화 — `inference/pipeline.py`, 목표 ≥15 FPS @ 1280×720
 
 ### Phase 2 — Traversability Segmentation
 - [ ] DINOv3 백본 공유 + Mask2Former/SegFormer head
@@ -158,15 +163,18 @@ terravision/
 
 본 저장소의 **자체 구현 코드는 MIT License** (ⓒ 2026 Software and System Laboratory, Daegu Catholic University) 를 따릅니다. 전체 조항은 [`LICENSE`](LICENSE) 참고.
 
-외부 의존성 · 모델 가중치는 각자의 라이선스를 따릅니다. 특히 DINOv3 사전학습 가중치는 Apache-2.0 이 아닌 **자체 DINOv3 License** (Hugging Face gated access) 로 배포되므로, 다운로드 전 HF 계정에서 라이선스 동의가 필요하며 상용 배포 조건은 별도 검토해야 합니다 — `docs/decisions/20260422_dinov3-backbone.md` 참고.
+외부 의존성 · 모델 가중치는 각자의 라이선스를 따릅니다. 두 가지 핵심 주의사항:
+
+- **Ultralytics (YOLO26, Phase 1-3 부터 detection 라인)** — **AGPL-3.0**. 본 저장소가 ultralytics 를 import 하므로 파생 저작물의 소스 공개 의무가 따라붙습니다. 학술/연구 범위는 무관하나 **상용 배포 시 ultralytics 상용 라이선스 또는 RT-DETR (Apache-2.0) 같은 대체 head 가 필요**합니다 — 상세는 `docs/decisions/20260428_pivot-to-yolo26.md` 의 R1 (AGPL-3.0 라이선스) 섹션 참고.
+- **DINOv3 사전학습 가중치 (Phase 2 segmentation 백본 후보)** — Apache-2.0 이 아닌 **자체 DINOv3 License** (Hugging Face gated access). 다운로드 전 HF 계정에서 라이선스 동의가 필요하며 상용 배포 조건은 별도 검토 — `docs/decisions/20260422_dinov3-backbone.md` 참고.
 
 ---
 
 ## 📚 참고 자료
 
-- [DINOv3 (Meta AI)](https://github.com/facebookresearch/dinov3)
-- [DINOv2 (Meta AI)](https://github.com/facebookresearch/dinov2) — 폴백 백본
-- [mmdetection (DINO-DETR)](https://github.com/open-mmlab/mmdetection)
+- [Ultralytics YOLO26](https://docs.ultralytics.com/models/yolo26/) — Phase 1-3 detection
+- [DINOv3 (Meta AI)](https://github.com/facebookresearch/dinov3) — Phase 2 segmentation 백본 후보
+- [DINOv2 (Meta AI)](https://github.com/facebookresearch/dinov2) — DINOv3 폴백
 - [boxmot (tracking)](https://github.com/mikel-brostrom/boxmot)
 - [Mask2Former](https://github.com/facebookresearch/Mask2Former)
 - [nuScenes Dataset](https://www.nuscenes.org/)

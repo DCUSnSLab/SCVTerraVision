@@ -1,0 +1,52 @@
+# Hydra subgroup: detection=yolo26_l — Phase 1-3d YOLO26-large, final baseline.
+# Gate: mAP ≥ 0.65, AP_small ≥ 0.52. Block until 1-3c passes. On pass, this
+# checkpoint becomes the new project baseline (supersedes DINOv3+DETR mAP=0.623).
+defaults:
+  - /dataset: coda_yolo
+  - _self_
+
+name: yolo26_l
+task: detect
+weights: yolo26l.pt
+data: ${dataset.ultralytics_yaml}
+
+training:
+  epochs: 50
+  batch: 8                    # 24GB headroom; bump to 16 with DDP across 2 GPUs
+  imgsz: 640
+  optimizer: auto
+  lr0: 0.01
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+  cos_lr: true
+  freeze: 10
+  patience: 30
+  cache: false
+  amp: true
+  workers: 8
+  close_mosaic: 10
+  device: null
+  project: ${paths.output_root}/checkpoints
+  exp_name: yolo26_l
+  exist_ok: false
+  seed: ${project.seed}
+  val: true
+
+augmentation:
+  mosaic: 1.0
+  mixup: 0.15
+  copy_paste: 0.3
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  degrees: 0.0
+  translate: 0.1
+  scale: 0.5
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0
+  fliplr: 0.5
