@@ -37,14 +37,19 @@ YOLO26 사전학습 가중치(`yolo26{n,s,m,l}.pt`)를 91-class (COCO80 + CoDA �
 
 ## 데이터 파이프라인 (1-3a 진입 게이트 — 학습 전 필수)
 
-- [ ] `python -m training.datasets.coda_to_yolo --split training` 실행
-  - 출력: `data/processed/coda_yolo/{images,labels}/train/`, `coda.yaml`
-  - 예상 stats: ~19,500 images, ~215,000 annotations (Phase 1-2b 와 동일 필터)
-- [ ] `python -m training.datasets.coda_to_yolo --split validation`
-- [ ] `python -m scripts.verify_yolo_dataset --sample-n 100`
-  - cross-check 0 errors, validate 0 errors, sample 시각화 100% 정상
-  - 클래스 분포에서 `service_vehicle`(89), `golf_cart`(90), CoDA-only 80..88 모두 비-zero count 인지 확인
-- [ ] (옵션) tiny subset 1-epoch smoke: `python -m training.train_yolo +detection=yolo26_n detection.training.epochs=1 detection.training.imgsz=320`
+- [x] `python -m training.datasets.coda_to_yolo --split training` (2026-04-28, 26s)
+  - 출력: 19,511 images / 215,615 annotations (Phase 1-2b 수치와 일치) ✓
+- [x] `python -m training.datasets.coda_to_yolo --split validation` (2026-04-28, 7s)
+  - 출력: 4,176 images / 45,729 annotations ✓
+- [x] `python -m scripts.verify_yolo_dataset --sample-n 50` (2026-04-28)
+  - cross-check 0 errors, validate 0 errors, 클래스 분포 정상
+  - 주의: golf_cart(90) 0건 — CoDA에 'Golf Cart' raw 라벨이 없거나 모두 occlusion/area 필터에서 drop됨. 학습 신호 없음 → 1-3d 통과 후 taxonomy 정리 검토.
+  - bus(5) 11건, motorcycle(3) 147건, fire_hydrant(10) 387건 등 long-tail 다수.
+- [x] tiny smoke: `+detection=yolo26_n +dataset=coda_yolo training.epochs=1 imgsz=320 batch=32 workers=0` (2026-04-28, 약 30분)
+  - **첫 실행은 ~16분 cache scan + 12분 1-epoch + 2min val** (workers=0 이슈)
+  - 결과 (1 epoch만의 sanity 수치, 성능 목표 아님): mAP50=0.0236, mAP50-95=0.00827, P=0.757, R=0.024
+  - 전체 파이프라인 무결: weights yolo26n.pt 자동 다운로드, 91-class head 자동 reset (606/708 transferred), freeze=10 적용, best.pt 5.5MB 저장, val_batch_pred.jpg 시각화 정상.
+  - **Hot-fix**: 체크포인트 경로가 `runs/detect/outputs/checkpoints/yolo26_n_smoke/` 로 떨어짐 (ultralytics SETTINGS.runs_dir prepended). `_resolve_project_dir(cfg)` 추가로 absolute path 강제 — 다음 실행부터 `outputs/checkpoints/<name>/` 직행. (2026-04-28 commit)
 
 ## 학습 체크리스트
 

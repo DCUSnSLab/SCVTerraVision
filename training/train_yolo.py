@@ -126,6 +126,23 @@ def _resolve_data_yaml(cfg: Any) -> str:
     return str(data_path)
 
 
+def _resolve_project_dir(cfg: Any) -> str:
+    """Make `detection.training.project` absolute.
+
+    Ultralytics prepends its own `SETTINGS.runs_dir` (default `runs/detect`)
+    to any *relative* `project` value, which lands checkpoints at e.g.
+    `runs/detect/outputs/checkpoints/<name>/` instead of the
+    `outputs/checkpoints/<name>/` we configured in `paths.output_root`.
+    Forcing an absolute path bypasses that prepending and keeps
+    everything under our project's standard `outputs/` tree.
+    """
+    project = Path(cfg.detection.training.project)
+    if not project.is_absolute():
+        project = (Path.cwd() / project).resolve()
+    project.mkdir(parents=True, exist_ok=True)
+    return str(project)
+
+
 def main(cfg: Any) -> None:
     """Entry point — invoked by Hydra. DDP is delegated to ultralytics."""
     _ensure_ml_deps()
@@ -165,7 +182,7 @@ def main(cfg: Any) -> None:
         "amp": bool(train_cfg.amp),
         "workers": int(train_cfg.workers),
         "close_mosaic": int(train_cfg.close_mosaic),
-        "project": str(train_cfg.project),
+        "project": _resolve_project_dir(cfg),
         "name": str(train_cfg.exp_name),
         "exist_ok": bool(train_cfg.exist_ok),
         "seed": int(train_cfg.seed),

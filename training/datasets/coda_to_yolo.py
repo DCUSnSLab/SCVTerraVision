@@ -213,9 +213,16 @@ def _split_dirname(split: str) -> str:
     return {"training": "train", "validation": "val", "testing": "test"}[split]
 
 
-def _stem(seq: str, frame_idx: int) -> str:
-    """Filename stem unique across (sequence, frame). Matches images/labels pair."""
-    return f"{seq}_{frame_idx:06d}"
+def _stem_from_image(image_src: Path) -> str:
+    """Filename stem unique across (sequence, frame).
+
+    Uses the raw CODa image filename as-is (e.g. `2d_rect_cam0_0_400`) so the
+    image symlink and the YOLO label txt always share the same stem —
+    ultralytics pairs them by stem at load time. Synthesizing a different
+    stem (e.g. `f"{seq}_{frame:06d}"`) breaks that pairing because the
+    symlink would still carry the original filename.
+    """
+    return image_src.stem
 
 
 def _link_image(src: Path, dst: Path, *, copy: bool) -> None:
@@ -316,7 +323,6 @@ def convert_coda_split_to_yolo(
         frames = frames_for_split(metadata_path, split)
 
         for frame_idx in frames:
-            stem = _stem(seq, frame_idx)
             image_src = (
                 coda_root
                 / "2d_rect"
@@ -330,6 +336,7 @@ def convert_coda_split_to_yolo(
                 # `images` regardless — for YOLO we drop the pair entirely
                 # since there is no image for the trainer to load).
                 continue
+            stem = _stem_from_image(image_src)
             _link_image(image_src, images_out / image_src.name, copy=copy_images)
             stats.images += 1
 
