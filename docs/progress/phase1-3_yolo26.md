@@ -124,16 +124,46 @@ YOLO26 사전학습 가중치(`yolo26{n,s,m,l}.pt`)를 91-class (COCO80 + CoDA �
 - nano + imgsz=1024 천장은 mAP@[.50:.95] ≈ 0.505, AP_small ≈ 0.24 부근.
 - close_mosaic=10 효과는 미미했음 (epoch 91→100 +0.0035 정도, 1차의 큰 점프 +0.035와 다른 양상).
 
-### 1-3b (small) — 진입 옵션
+### 1-3a (nano) — 3차 시도 (Pseudo-labeling, 사용자 issue 진단 후)
 
-ADR plan 분기 확장: 2차 결과로 mAP 게이트는 통과, AP_small 격차는 capacity 증가로 메우기 권장. 다음 후보:
+**Trigger**: 사용자가 1차/2차 결과로 다음 두 이슈 발견 (2026-04-29):
+1. 재학습 후 기존 yolo의 정확한 bbox 가 살짝 어긋남 (차량 등)
+2. 기존 COCO80 클래스 검출 성능 저하 (catastrophic forgetting)
 
-- **옵션 A (추천)**: small + imgsz=1024 — `+detection=yolo26_s detection.training.imgsz=1024 detection.training.batch=16 ...`
-  - small 약 5× nano params → mAP/AP_small 추가 향상 기대
-  - 1-3b 게이트 mAP ≥ 0.58, AP_small ≥ 0.45
-  - 예상 시간 DDP 4-GPU ~6-8h
-- 옵션 B: 1-3a 추가 sweep (lr0, optimizer=AdamW) — 한계점 가까워 ROI 낮음
-- 옵션 C: AP_small 게이트 완화 + 1-3b 직행 — ADR 수정 필요
+**진단 (사실 확인 후)**:
+- 사용자 가설 (16:9 letterbox 부재) 은 사실 X. CoDA = 1224×1024, yolo26 사전학습 = 640 정사각형, ultralytics 가 letterbox 자동.
+- 진짜 원인: (a) catastrophic forgetting, (b) **CoDA 라벨 자체가 LiDAR 3D→2D 투영이라 시각적 박스보다 약간 어긋남** — 그걸 학습하니 추론도 어긋남.
+
+**해결 — Pseudo-labeling (D11~D17, 2026-04-29 결정)**:
+
+| ID | 결정 |
+|----|------|
+| D11 | 사전학습 yolo26n.pt 추론 결과를 학습 라벨로 사용 |
+| D12 | Vehicle 8 raw subtype (Car/Truck/Bus/Pickup/Delivery/Service Vehicle/Utility Vehicle/Golf Cart) 전면 pseudo 대체. service_vehicle(89)/golf_cart(90) 학습 신호 0 → deprecated |
+| D13 | COCO80 6 overlap (Pedestrian/Bike/Motorcycle/Traffic Light/Fire Hydrant/Bench) pseudo 대체 |
+| D14 | CoDA-only 9 (scooter/tree/pole/sign/bollard/cone/barrier/bike_rack/trash_can) 만 CoDA 라벨 유지 |
+| D15 | Pseudo 추론 모델 = yolo26n.pt |
+| D16 | conf=0.25, iou=0.7, imgsz=1024 |
+| D17 | small 진입 보류 — 본 시도 게이트 통과 후 결정 |
+
+- [x] taxonomy 수정 (`coda_yolo_taxonomy.yaml` D12/D13 14 raw 클래스 → coda_dropped 이동)
+- [x] `training/datasets/pseudo_label_coda.py` 신규 (yolo26n inference)
+- [x] `training/datasets/merge_pseudo_with_coda.py` 신규 (cls 0..79 pseudo + cls 80..88 coda merge)
+- [x] `tests/test_merge_pseudo_with_coda.py` 7 케이스 (D12/D13/D14 검증) + 기존 `test_coda_to_yolo.py` v2 동작에 맞게 갱신 — pytest 79 passed, 8 skipped
+- [x] `configs/dataset/coda_yolo_v2.yaml` 신규
+- [x] Pseudo-label 생성 (단일 GPU, 15분 32초): train 19,511 / val 4,176
+- [x] Merge: train 152,095 pseudo + 93,802 coda-only = 245,897 box (v1 대비 +14%); val 32,240 + 20,093 = 52,333. 폐기 박스 train 121,813 / val 25,636.
+- [x] verify_yolo_dataset pass — COCO80 30+ 클래스 신규 학습 신호 (person 47.58%, car 5.65%, backpack 2.27% 등). CoDA-only 분포 변동 없음. service_vehicle/golf_cart = 0.
+
+#### 학습 + 평가 (실행 대기)
+- [ ] `python -m training.train_yolo +detection=yolo26_n +dataset=coda_yolo_v2 detection.training.device='0,1,2,3' detection.training.imgsz=1024 detection.training.batch=32 detection.training.workers=8 detection.training.exp_name=yolo26_n_phase1-3a_pseudo logging.wandb.enabled=true` (4-GPU DDP, ~6h)
+- [ ] eval_yolo --mode coda16 → 1차 / 2차 / 3차 / DETR 비교 표
+- [ ] 시각적 검증 — 차량/사람 bbox 정확도 직접 확인 (사용자 우려 #1 검증)
+- [ ] 게이트 재판정 → 1-3b 진입 결정
+
+### 1-3b (small) — 진입 보류 (D17)
+
+위 3차 결과로 결정.
 
 ### 1-3b (small)
 

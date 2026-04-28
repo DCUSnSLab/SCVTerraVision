@@ -78,27 +78,21 @@ class TestYoloTaxonomyLoad:
         assert tax.class_names[89] == "service_vehicle"
         assert tax.class_names[90] == "golf_cart"
 
-    def test_vehicle_dispatch(self) -> None:
+    def test_vehicle_subtypes_dropped(self) -> None:
+        """D12 — vehicle 8 raw 클래스 모두 학습 라벨에서 제외 (pseudo 가 대체)."""
         tax = load_yolo_taxonomy(REAL_YOLO_TAXONOMY)
-        # CoDA vehicle subtypes must dispatch to the right COCO/CoDA-new ids
-        assert tax.coda_raw_to_yolo["Car"] == 2
-        assert tax.coda_raw_to_yolo["Bus"] == 5
-        assert tax.coda_raw_to_yolo["Truck"] == 7
-        assert tax.coda_raw_to_yolo["Pickup Truck"] == 7
-        assert tax.coda_raw_to_yolo["Delivery Truck"] == 7
-        assert tax.coda_raw_to_yolo["Service Vehicle"] == 89
-        assert tax.coda_raw_to_yolo["Utility Vehicle"] == 89
-        assert tax.coda_raw_to_yolo["Golf Cart"] == 90
+        for raw in ("Car", "Bus", "Truck", "Pickup Truck", "Delivery Truck",
+                    "Service Vehicle", "Utility Vehicle", "Golf Cart"):
+            assert raw not in tax.coda_raw_to_yolo, raw
+            assert tax.yolo_id_for(raw) is None, raw  # dropped
 
-    def test_coco_native_overlaps(self) -> None:
+    def test_coco_overlap_classes_dropped(self) -> None:
+        """D13 — COCO80 overlap 6 raw 클래스 학습 라벨에서 제외 (pseudo 대체)."""
         tax = load_yolo_taxonomy(REAL_YOLO_TAXONOMY)
-        # CoDA classes already in COCO80 should land on the COCO id
-        assert tax.coda_raw_to_yolo["Pedestrian"] == 0
-        assert tax.coda_raw_to_yolo["Bike"] == 1
-        assert tax.coda_raw_to_yolo["Motorcycle"] == 3
-        assert tax.coda_raw_to_yolo["Traffic Light"] == 9
-        assert tax.coda_raw_to_yolo["Fire Hydrant"] == 10
-        assert tax.coda_raw_to_yolo["Bench"] == 13
+        for raw in ("Pedestrian", "Bike", "Motorcycle",
+                    "Traffic Light", "Fire Hydrant", "Bench"):
+            assert raw not in tax.coda_raw_to_yolo, raw
+            assert tax.yolo_id_for(raw) is None, raw  # dropped
 
     def test_dropped_class_returns_none(self) -> None:
         tax = load_yolo_taxonomy(REAL_YOLO_TAXONOMY)
@@ -183,12 +177,13 @@ class TestXywhToYoloNorm:
 
 
 class TestYoloAnnotationsFromFrame:
-    def test_pedestrian_emits_class_zero(self) -> None:
+    def test_scooter_emits_class_80(self) -> None:
+        """CoDA-only 9 (id 80..88) 만 학습 라벨에 들어감. Scooter → 80."""
         tax = load_yolo_taxonomy(REAL_YOLO_TAXONOMY)
         calib = _identity_calibration()
         stats = ConversionStats()
         rows = yolo_annotations_from_frame(
-            [_bbox("Pedestrian")],
+            [_bbox("Scooter")],
             calib,
             tax,
             allow_occlusion=frozenset({"None", "Light", "Medium"}),
@@ -198,21 +193,23 @@ class TestYoloAnnotationsFromFrame:
         )
         assert len(rows) == 1
         cls_id, (cx, cy, w, h) = rows[0]
-        assert cls_id == 0
+        assert cls_id == 80
         assert 0.0 <= cx <= 1.0 and 0.0 <= cy <= 1.0
         assert w > 0.0 and h > 0.0
 
-    def test_vehicle_dispatch_per_subtype(self) -> None:
+    def test_vehicle_and_overlap_classes_increment_taxonomy_drop(self) -> None:
+        """D12+D13 — vehicle / COCO80 overlap 라벨은 taxonomy drop 처리."""
         tax = load_yolo_taxonomy(REAL_YOLO_TAXONOMY)
         calib = _identity_calibration()
         stats = ConversionStats()
-        # All five subtypes that go to different YOLO ids
         anns = [
             _bbox("Car"),
             _bbox("Bus"),
             _bbox("Truck"),
             _bbox("Service Vehicle"),
             _bbox("Golf Cart"),
+            _bbox("Pedestrian"),
+            _bbox("Bench"),
         ]
         rows = yolo_annotations_from_frame(
             anns,
@@ -223,8 +220,9 @@ class TestYoloAnnotationsFromFrame:
             min_area=64.0,
             stats=stats,
         )
-        cls_ids = sorted([r[0] for r in rows])
-        assert cls_ids == [2, 5, 7, 89, 90]
+        assert rows == []
+        assert stats.dropped_by_taxonomy == 7
+        assert stats.dropped_by_occlusion == 0
 
     def test_dropped_class_increments_taxonomy_stat(self) -> None:
         tax = load_yolo_taxonomy(REAL_YOLO_TAXONOMY)
@@ -244,11 +242,12 @@ class TestYoloAnnotationsFromFrame:
         assert stats.dropped_by_occlusion == 0
 
     def test_occlusion_filter(self) -> None:
+        """occlusion 필터 — CoDA-only 클래스(Tree)에 적용해 검증."""
         tax = load_yolo_taxonomy(REAL_YOLO_TAXONOMY)
         calib = _identity_calibration()
         stats = ConversionStats()
         rows = yolo_annotations_from_frame(
-            [_bbox("Pedestrian", occluded="Heavy")],
+            [_bbox("Tree", occluded="Heavy")],
             calib,
             tax,
             allow_occlusion=frozenset({"None"}),

@@ -121,36 +121,24 @@ yolo_classes:
   - { id: 89, name: service_vehicle }
   - { id: 90, name: golf_cart }
 
-# Raw CoDA class names → YOLO id (single-step lookup used by the converter).
-# Vehicle dispatch is encoded directly here — Car→2, Bus→5, Truck variants→7,
-# Service/Utility Vehicle→89, Golf Cart→90.
+# Raw CoDA class names → YOLO id. Phase 1-3a 후속 (D12, D13, D14, 2026-04-29):
+# COCO80과 겹치는 6 클래스 (Pedestrian/Bike/Motorcycle/Traffic Light/Fire Hydrant/
+# Bench) 와 vehicle 8 subtype (Car/Truck/Bus/Pickup/Delivery/Service Vehicle/
+# Utility Vehicle/Golf Cart) 은 학습 라벨에서 제거 — 사전학습 yolo26n.pt 의
+# 시각적 박스(pseudo-label)가 CoDA 의 LiDAR 3D→2D 투영 박스보다 정확하다는
+# 진단에 따라, 이 14 raw 클래스의 라벨은 pseudo 가 채운다.
+# 본 매핑에 남는 것은 yolo 가 모르는 캠퍼스 특화 9 클래스 (id 80..88) 뿐.
+# 90/89 (golf_cart, service_vehicle) 은 pseudo 로 차량 흡수 → 학습 신호 0 으로
+# 사실상 deprecated. head shape 는 nc=91 그대로 유지.
 coda_raw_to_yolo:
-  # 0 person
-  Pedestrian: 0
-  # 1 bicycle
-  Bike: 1
-  # 3 motorcycle
-  Motorcycle: 3
   # 80 scooter (wheeled-board group, sub-pedestrian speed)
   Scooter: 80
   Segway: 80
   Skateboard: 80
-  # Vehicle dispatch — COCO car / bus / truck shape buckets, plus campus
-  # service_vehicle / golf_cart for shapes that look unlike any COCO vehicle.
-  Car: 2
-  Truck: 7
-  Bus: 5
-  "Pickup Truck": 7
-  "Delivery Truck": 7
-  "Service Vehicle": 89
-  "Utility Vehicle": 89
-  "Golf Cart": 90
   # 81 tree
   Tree: 81
   # 82 pole
   Pole: 82
-  # 9 traffic light
-  "Traffic Light": 9
   # 83 sign (Phase 1-3 keeps signs merged; split deferred to a future phase)
   "Traffic Sign": 83
   "Informational Sign": 83
@@ -169,16 +157,16 @@ coda_raw_to_yolo:
   "Traffic Arm": 86
   # 87 bike_rack
   "Bike Rack": 87
-  # 13 bench (COCO native)
-  Bench: 13
   # 88 trash_can
   "Trash Can": 88
   Dumpster: 88
-  # 10 fire hydrant (COCO native)
-  "Fire Hydrant": 10
 
-# Identical to coda_taxonomy.yaml's drop list — Phase 1-3 inherits the same
-# decisions about indoor / single-sequence / overhead-structure classes.
+# 본 목록은 두 부분으로 구성:
+# (1) 기존 16-class taxonomy 의 drop 리스트 (indoor / single-sequence /
+#     overhead 등, coda_taxonomy.yaml 와 동일)
+# (2) Phase 1-3a 후속 (D12, D13) 으로 학습 라벨에서 제거된 14 raw 클래스
+#     — 이미지에는 여전히 존재하지만 CoDA 라벨은 background 처리, 대신
+#     pseudo-label (yolo26n 추론) 이 해당 객체를 채운다.
 coda_dropped:
   - "Canopy"
   - "Parking Kiosk"
@@ -205,6 +193,23 @@ coda_dropped:
   - "Emergency Phone"
   - "Vacuum Cleaner"
   - "Water Fountain"
+  # ---- (2) Phase 1-3a 후속 — pseudo-label 가 대체 (D12, D13) ----
+  # COCO80 과 겹치는 6 클래스: yolo26n pseudo 가 시각적으로 더 정확
+  - "Pedestrian"        # → pseudo 0 (person)
+  - "Bike"              # → pseudo 1 (bicycle)
+  - "Motorcycle"        # → pseudo 3 (motorcycle)
+  - "Traffic Light"     # → pseudo 9
+  - "Fire Hydrant"      # → pseudo 10
+  - "Bench"             # → pseudo 13
+  # Vehicle 8 subtype: yolo26n pseudo 의 car/bus/truck 가 LiDAR 박스보다 정확
+  - "Car"               # → pseudo 2 (car)
+  - "Truck"             # → pseudo 7 (truck)
+  - "Bus"               # → pseudo 5 (bus)
+  - "Pickup Truck"      # → pseudo 7
+  - "Delivery Truck"    # → pseudo 7
+  - "Service Vehicle"   # → pseudo (yolo가 car/truck 등으로 인식, id 89 deprecated)
+  - "Utility Vehicle"   # → pseudo
+  - "Golf Cart"         # → pseudo (id 90 deprecated)
 
 # Operational 16-class id (coda_taxonomy.yaml) → YOLO id. Documentation only;
 # the converter uses coda_raw_to_yolo directly. Use this for sanity checks
