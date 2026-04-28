@@ -106,6 +106,51 @@ def _disable_ultralytics_wandb() -> None:
         LOG.warning("could not disable ultralytics wandb integration: %s", exc)
 
 
+def _enable_ultralytics_wandb(cfg: Any) -> None:
+    """Turn ultralytics' built-in W&B integration ON for DDP runs (option A).
+
+    Background — D9 originally disabled the built-in path because in
+    single-GPU mode our `_wandb_init` + on_fit_epoch_end callback covers
+    the same ground without double-logging. But in DDP mode ultralytics
+    re-launches the trainer in subprocesses (via torchrun-style spawn)
+    that never enter our `main()`, so our callback never fires there.
+    Re-enabling the built-in path lets ultralytics own W&B end-to-end
+    inside the subprocesses, where our parent-process logger cannot reach.
+
+    We forward `cfg.logging.wandb.{project,entity,mode}` via env vars so
+    ultralytics' wandb plugin lands runs in the same project as the
+    Phase 1-2b DETR runs (no manual project switch in the W&B UI).
+    """
+    try:
+        from ultralytics.utils import SETTINGS  # type: ignore
+
+        SETTINGS.update({"wandb": True})
+    except Exception as exc:
+        LOG.warning("could not enable ultralytics wandb integration: %s", exc)
+        return
+    if cfg.logging.wandb.project:
+        os.environ.setdefault("WANDB_PROJECT", str(cfg.logging.wandb.project))
+    if cfg.logging.wandb.entity:
+        os.environ.setdefault("WANDB_ENTITY", str(cfg.logging.wandb.entity))
+    if cfg.logging.wandb.mode:
+        os.environ.setdefault("WANDB_MODE", str(cfg.logging.wandb.mode))
+
+
+def _is_ddp(cfg: Any) -> bool:
+    """Detect multi-GPU DDP from cfg.detection.training.device.
+
+    Accepts the ultralytics-style spellings: int (single GPU), str like
+    '0,1,2,3' or '0,3' (DDP), list of ints (DDP), 'cpu' / None (single).
+    """
+    device = cfg.detection.training.device
+    if device is None:
+        return False
+    if isinstance(device, (list, tuple)):
+        return len(device) > 1
+    s = str(device)
+    return "," in s
+
+
 def _resolve_data_yaml(cfg: Any) -> str:
     """Compute the absolute path to the ultralytics dataset YAML.
 
@@ -146,11 +191,24 @@ def _resolve_project_dir(cfg: Any) -> str:
 def main(cfg: Any) -> None:
     """Entry point — invoked by Hydra. DDP is delegated to ultralytics."""
     _ensure_ml_deps()
-    _disable_ultralytics_wandb()
+
+    ddp_mode = _is_ddp(cfg)
+    # In DDP mode, hand W&B logging off to ultralytics' built-in integration
+    # (it propagates into the trainer subprocesses); our callback would never
+    # fire in those subprocesses. In single-GPU mode, keep using our callback.
+    if ddp_mode:
+        if cfg.logging.wandb.enabled:
+            _enable_ultralytics_wandb(cfg)
+            LOG.info("DDP mode: ultralytics built-in W&B integration enabled")
+        else:
+            _disable_ultralytics_wandb()
+        run = None
+    else:
+        _disable_ultralytics_wandb()
+        run = _wandb_init(cfg)
 
     from ultralytics import YOLO  # type: ignore
 
-    run = _wandb_init(cfg)
     train_cfg = cfg.detection.training
     aug_cfg = cfg.detection.augmentation
 
