@@ -92,13 +92,48 @@ YOLO26 사전학습 가중치(`yolo26{n,s,m,l}.pt`)를 91-class (COCO80 + CoDA �
 - val_batch*_pred.jpg / labels.jpg 시각화
 - W&B online run (계정 j-soobin-daegu)
 
-### 1-3a (nano) — 2차 시도 (imgsz=1024 fallback, ADR plan 분기)
+### 1-3a (nano) — 2차 시도 (imgsz=1024 fallback, 부분 통과)
 
-- [ ] `python -m training.train_yolo +detection=yolo26_n +dataset=coda_yolo "detection.training.device='0,1,2,3'" detection.training.imgsz=1024 detection.training.batch=32 detection.training.workers=8 detection.training.exp_name=yolo26_n_phase1-3a_1024 logging.wandb.enabled=true`
-  - 사유: AP_small=0.134 → 0.40 도달 위한 해상도 ↑. 동일 nano로 변수 분리.
-  - batch는 1024 해상도 메모리 영향으로 64→32 축소.
-- [ ] eval_yolo --mode coda16 → 새 비교 표
-- [ ] 게이트 재판정. 통과 시 1-3b 착수, 미달 시 small + imgsz=1024 escalate (옵션 C).
+- [x] 4-GPU DDP 학습 (100 epoch, batch=32, imgsz=1024, freeze=10) — 6.001h
+  - GPU 사용 ~5GB/24GB (AMP 효과로 batch=32에서도 매우 여유)
+  - W&B run: `yolo26_n_phase1-3a_1024_20260428_191411` (j-soobin-daegu)
+- [x] best.pt 저장: `outputs/checkpoints/yolo26_n_phase1-3a_1024/weights/best.pt` (5.7MB, epoch 100, mAP50-95=0.5478 by ultralytics val)
+- [x] eval_yolo --mode coda16: `outputs/eval_phase1-3a_nano_1024_coda16.json`
+
+#### DETR baseline / 1-3a 1차 / 1-3a 2차 비교
+
+| 지표 | DETR (1-2b) | 1-3a 1차 (640) | **1-3a 2차 (1024)** | Δ 1차→2차 | Δ vs DETR |
+|------|----:|----:|----:|----:|----:|
+| mAP@[.50:.95] | 0.623 | 0.450 | **0.505** | **+0.055** | -0.118 |
+| AP50 | 0.925 | 0.738 | **0.784** | +0.046 | -0.141 |
+| AP75 | 0.700 | 0.482 | **0.562** | +0.080 | -0.138 |
+| **AP_small** | 0.350 | 0.134 | **0.241** | **+0.107 (+80%)** | -0.109 |
+| AP_medium | 0.550 | 0.369 | **0.433** | +0.064 | -0.117 |
+| AP_large | 0.740 | 0.582 | **0.640** | +0.058 | -0.100 |
+| AR_100 | — | 0.647 | **0.706** | +0.059 | — |
+
+#### 게이트 판정 (mAP ≥ 0.50, AP_small ≥ 0.40)
+
+- mAP = **0.505** → ✅ **통과**
+- AP_small = 0.241 → ❌ 미달 (그러나 1차 대비 +80% 개선)
+- **결론: 부분 통과 — AP_small은 nano 단독으로 한계, small/medium 단계에서 추가 capacity 필요**
+
+#### imgsz=1024 효과 정리
+
+- 모든 metric 일관되게 +0.04~+0.11 끌어올림. AP_small 효과 가장 큼 (+80%).
+- nano + imgsz=1024 천장은 mAP@[.50:.95] ≈ 0.505, AP_small ≈ 0.24 부근.
+- close_mosaic=10 효과는 미미했음 (epoch 91→100 +0.0035 정도, 1차의 큰 점프 +0.035와 다른 양상).
+
+### 1-3b (small) — 진입 옵션
+
+ADR plan 분기 확장: 2차 결과로 mAP 게이트는 통과, AP_small 격차는 capacity 증가로 메우기 권장. 다음 후보:
+
+- **옵션 A (추천)**: small + imgsz=1024 — `+detection=yolo26_s detection.training.imgsz=1024 detection.training.batch=16 ...`
+  - small 약 5× nano params → mAP/AP_small 추가 향상 기대
+  - 1-3b 게이트 mAP ≥ 0.58, AP_small ≥ 0.45
+  - 예상 시간 DDP 4-GPU ~6-8h
+- 옵션 B: 1-3a 추가 sweep (lr0, optimizer=AdamW) — 한계점 가까워 ROI 낮음
+- 옵션 C: AP_small 게이트 완화 + 1-3b 직행 — ADR 수정 필요
 
 ### 1-3b (small)
 
