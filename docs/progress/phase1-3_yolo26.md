@@ -53,15 +53,52 @@ YOLO26 사전학습 가중치(`yolo26{n,s,m,l}.pt`)를 91-class (COCO80 + CoDA �
 
 ## 학습 체크리스트
 
-### 1-3a (nano)
+### 1-3a (nano) — 1차 시도 (2026-04-28, 게이트 미달)
 
-- [ ] `python -m training.train_yolo +detection=yolo26_n logging.wandb.enabled=true`
-- [ ] W&B run 1 epoch 후 로그 stream 확인 (ultralytics 자체 로그 비활성화 검증)
-- [ ] 학습 종료 후:
-  - [ ] `python -m scripts.eval_yolo --mode coda16 --checkpoint outputs/checkpoints/yolo26_n/weights/best.pt --val-annotations data/annotations/coda_validation_coco.json --images-root /home/marsberry/dataset/coda-devkit/data/CODa_full/2d_rect/cam0 --output outputs/eval_phase1-3a_nano_coda16.json`
-  - [ ] `python -m scripts.eval_yolo --mode coco80_regression --checkpoint <best.pt> --val-annotations <coco80_minival.json> --images-root <coco_val_dir> --output outputs/eval_phase1-3a_nano_coco80.json`
-  - [ ] DETR 비교 표 본 문서에 작성
-- [ ] 게이트 판정 → 통과 시 1-3b 착수
+- [x] 4-GPU DDP 학습 (100 epoch, batch=64, imgsz=640, MuSGD, freeze=10) — 4.010h
+- [x] W&B online stream 확인 (run id: `yolo26_n_phase1-3a_20260428_143335`)
+- [x] best.pt 저장: `outputs/checkpoints/yolo26_n_phase1-3a/weights/best.pt` (5.6MB, epoch 100, mAP50-95=0.4889 by ultralytics val)
+- [x] eval_yolo --mode coda16 (pycocotools, DETR 호환 메트릭)
+  - 결과 JSON: `outputs/eval_phase1-3a_nano_coda16.json`
+
+#### DETR baseline 비교 (Phase 1-2b epoch_050 vs YOLO26-n best.pt)
+
+| 지표 | DETR (ViT-B, imgsz=1024) | YOLO26-n (imgsz=640) | Δ |
+|------|----:|----:|----:|
+| mAP@[.50:.95] | 0.623 | **0.450** | -0.173 |
+| AP50 | 0.925 | 0.738 | -0.187 |
+| AP75 | 0.700 | 0.482 | -0.218 |
+| **AP_small** | 0.350 | **0.134** | **-0.216** |
+| AP_medium | 0.550 | 0.369 | -0.181 |
+| AP_large | 0.740 | 0.582 | -0.158 |
+
+#### 게이트 판정 (mAP ≥ 0.50, AP_small ≥ 0.40, COCO80 회귀 ≤ -0.05)
+
+- mAP = 0.450 (-0.05 미달)
+- **AP_small = 0.134 (-0.266 대폭 미달, 핵심 실패 지점)**
+- COCO80 회귀: 미평가 (외부 mini-val 없음)
+- **결론: 게이트 미달 → ADR plan의 1차 fallback (imgsz 1024 sweep) 검토**
+
+#### 원인 분석
+
+- **모델 크기 격차**: DETR ViT-B 86M vs YOLO26-n 2.6M (33×). nano capacity 한계.
+- **입력 해상도**: DETR 1024 vs YOLO 640. AP_small 격차의 주요 원인 가능성.
+- STAL/NMS-free 등 YOLO26 혁신은 capacity 충분 시 빛남. nano 단독으론 부족.
+
+#### 보존된 산출물
+
+- best.pt (학습 weights), last.pt
+- results.csv, BoxPR_curve / BoxF1_curve / confusion_matrix 시각화
+- val_batch*_pred.jpg / labels.jpg 시각화
+- W&B online run (계정 j-soobin-daegu)
+
+### 1-3a (nano) — 2차 시도 (imgsz=1024 fallback, ADR plan 분기)
+
+- [ ] `python -m training.train_yolo +detection=yolo26_n +dataset=coda_yolo "detection.training.device='0,1,2,3'" detection.training.imgsz=1024 detection.training.batch=32 detection.training.workers=8 detection.training.exp_name=yolo26_n_phase1-3a_1024 logging.wandb.enabled=true`
+  - 사유: AP_small=0.134 → 0.40 도달 위한 해상도 ↑. 동일 nano로 변수 분리.
+  - batch는 1024 해상도 메모리 영향으로 64→32 축소.
+- [ ] eval_yolo --mode coda16 → 새 비교 표
+- [ ] 게이트 재판정. 통과 시 1-3b 착수, 미달 시 small + imgsz=1024 escalate (옵션 C).
 
 ### 1-3b (small)
 
