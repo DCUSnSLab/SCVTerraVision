@@ -200,9 +200,48 @@ YOLO26 사전학습 가중치(`yolo26{n,s,m,l}.pt`)를 91-class (COCO80 + CoDA �
 | C | hybrid — small + v2 (pseudo) 로 시도, 시각적 검증 후 최종 결정 | 같음 |
 | D | 1-3a sweep 추가 (lr0/AdamW) — ROI 낮음 | 다중 |
 
-### 1-3b (small) — 진입 보류 (D17)
+### 1-3b (small) — Pseudo 라벨 + 1024 (D17 결정에 따라 진행)
 
-위 3차 결과로 결정.
+사용자가 3차 nano 결과를 시각적으로 평가하여 pseudo-labeling 노선이 더 정확하다고 판단 → small 단계로 escalate.
+
+- [x] 4-GPU DDP 학습 (80 epoch, batch=16, imgsz=1024) — 7.152h
+  - GPU 사용 ~3.7GB/24GB (매우 여유)
+  - W&B run: `yolo26_s_phase1-3b_pseudo_20260429_110153`
+- [x] best.pt 저장 (epoch 54, ultralytics val mAP50-95=0.5003)
+- [x] eval_yolo --mode coda16: `outputs/eval_phase1-3b_small_pseudo_coda16.json`
+- [x] 시각 비교 sample (`outputs/compare/small_v2_1024/*.jpg` 8장)
+
+#### 1차 / 2차 / 3차 nano / 1-3b small 비교 (eval_yolo coda16)
+
+| 지표 | DETR | 1차 nano | 2차 nano | 3차 nano | **small** |
+|------|----:|----:|----:|----:|----:|
+| mAP@[.5:.95] | 0.623 | 0.450 | **0.505** | 0.298 | 0.354 |
+| AP50 | 0.925 | 0.738 | 0.784 | 0.492 | 0.537 |
+| AP75 | 0.700 | 0.482 | 0.562 | 0.320 | 0.394 |
+| AP_small | 0.350 | 0.134 | 0.241 | 0.098 | **0.165** |
+| AP_medium | 0.550 | 0.369 | 0.433 | 0.245 | 0.309 |
+| AP_large | 0.740 | 0.582 | 0.640 | 0.389 | 0.449 |
+
+#### 핵심 관찰
+
+- Small이 3차 nano 대비 모든 metric +0.05~+0.07 향상 (capacity 효과 확인)
+- 그러나 **v2 pseudo 라인은 2차 nano (v1) metric 보다 항상 손해**: CoDA val GT (LiDAR 투영) vs 추론 (시각 박스) IoU 격차로 mAP 측정에서 -0.10~-0.15 차감
+- 1-3b 게이트 (mAP ≥ 0.58, AP_small ≥ 0.45) **미달** — quantitative
+
+#### 정성적 평가 (사용자 시각 비교)
+
+- 3차 nano 결과가 2차 nano 대비 시각적 박스 정확도 우수 — 사용자 확인됨
+- small (1-3b) 은 더 큰 capacity로 추가 향상 기대
+- 시각 비교 자료: `outputs/compare/{2nd_v1_1024, 3rd_pseudo_1024, small_v2_1024}/*.jpg` (각 8장 동일 이미지)
+
+#### 다음 단계 후보 (사용자 결정 대기)
+
+| 옵션 | 내용 | 시간 |
+|------|------|------|
+| **A** | medium + v2 pseudo 직행 — capacity ↑로 metric+정성 모두 향상 | DDP 4-GPU ~15-20h |
+| **B** | BDD100K 합치기 (시각 박스 풍부, 변환기 이미 보유) — pseudo 보강 | 변환 ~30분 + 학습 6h |
+| **C** | small 그대로 production 베이스라인 채택, 1-4 (Tracking) 진입 | 즉시 |
+| D | CoDA GT 시각 박스로 자체 라벨링 — 비용 큼 | days |
 
 ### 1-3b (small)
 
