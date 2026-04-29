@@ -1,0 +1,29 @@
+# Hydra subgroup: dataset=coda_yolo
+#
+# Phase 1-3 — YOLO26 fine-tune dataset. Wraps the YOLO-format export produced
+# by `training/datasets/coda_to_yolo.py` from the raw CODa data. The 91-class
+# taxonomy = COCO80 + CoDA-only 11; see coda_yolo_taxonomy.yaml.
+#
+# License: CC BY-NC-SA 4.0 + UT Non-Commercial Agreement (Oct 2023). Trained
+# weights are research-only — see docs/decisions/20260422_coda-primary-dataset.md
+# and docs/decisions/20260428_pivot-to-yolo26.md (AGPL-3.0 ultralytics impact).
+name: coda_yolo
+split: training  # informational only — the converter writes both train + val
+
+coda_root: ${oc.env:CODA_ROOT,/home/marsberry/dataset/coda-devkit/data/CODa_full}
+yolo_root: ${paths.data_root}/processed/coda_yolo
+ultralytics_yaml: ${dataset.yolo_root}/coda.yaml
+taxonomy_path: configs/dataset/coda_yolo_taxonomy.yaml
+
+num_classes: 91
+
+# Reused 1:1 from configs/dataset/coda.yaml so the 1-2b → 1-3 transition
+# does not drift on filtering. If you adjust filters here, mirror in
+# coda.yaml (or extract to a shared anchor) so the DETR baseline stays
+# comparable to the YOLO baseline at the same data scope.
+filters:
+  min_area: 64.0
+  min_visible_corners: 2
+  allow_occlusion: [None, Light, Medium]
+
+cameras: [cam0]

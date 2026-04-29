@@ -1,0 +1,261 @@
+# YOLO 91-class taxonomy = COCO80 (0..79) + CoDA campus-specific (80..90).
+#
+# Approved 2026-04-28 — see docs/decisions/20260428_pivot-to-yolo26.md.
+# This taxonomy backs Phase 1-3 (YOLO26 fine-tune). The 16-class operational
+# taxonomy in coda_taxonomy.yaml is preserved unchanged so existing CoDA-COCO
+# JSON exports + 1-2b DETR checkpoints stay reproducible.
+#
+# Schema (consumed by training/datasets/coda_to_yolo.py):
+#   version              : schema version
+#   num_classes          : 91 (0..90)
+#   yolo_classes         : list of {id, name} for ultralytics `names` (0..90)
+#   coda_raw_to_yolo     : {CODa raw class name → YOLO id}
+#                          Combines 16-class collapsing + vehicle dispatch.
+#                          Raw names NOT listed and NOT in coda_dropped are
+#                          rejected so a CODa update cannot silently drop
+#                          classes (mirrors coda_to_coco.py's strict mode).
+#   coda_dropped         : CODa raw names treated as background (no label),
+#                          identical to coda_taxonomy.yaml's drop list.
+#   operational_to_yolo  : {CoDA 16-class op id → YOLO id or __DISPATCH__}
+#                          Used only for documentation / sanity tests.
+#                          op id 5 (vehicle) → __DISPATCH__: subtype-aware
+#                          lookup happens at raw-name level via
+#                          coda_raw_to_yolo.
+#   yolo_to_operational  : {YOLO id → CoDA 16-class op id} for eval-time
+#                          reverse-mapping in --mode coda16.
+version: 1
+num_classes: 91
+
+yolo_classes:
+  # ---- COCO80 (0..79) — Ultralytics standard names, do not reorder ----
+  - { id: 0,  name: person }
+  - { id: 1,  name: bicycle }
+  - { id: 2,  name: car }
+  - { id: 3,  name: motorcycle }
+  - { id: 4,  name: airplane }
+  - { id: 5,  name: bus }
+  - { id: 6,  name: train }
+  - { id: 7,  name: truck }
+  - { id: 8,  name: boat }
+  - { id: 9,  name: traffic light }
+  - { id: 10, name: fire hydrant }
+  - { id: 11, name: stop sign }
+  - { id: 12, name: parking meter }
+  - { id: 13, name: bench }
+  - { id: 14, name: bird }
+  - { id: 15, name: cat }
+  - { id: 16, name: dog }
+  - { id: 17, name: horse }
+  - { id: 18, name: sheep }
+  - { id: 19, name: cow }
+  - { id: 20, name: elephant }
+  - { id: 21, name: bear }
+  - { id: 22, name: zebra }
+  - { id: 23, name: giraffe }
+  - { id: 24, name: backpack }
+  - { id: 25, name: umbrella }
+  - { id: 26, name: handbag }
+  - { id: 27, name: tie }
+  - { id: 28, name: suitcase }
+  - { id: 29, name: frisbee }
+  - { id: 30, name: skis }
+  - { id: 31, name: snowboard }
+  - { id: 32, name: sports ball }
+  - { id: 33, name: kite }
+  - { id: 34, name: baseball bat }
+  - { id: 35, name: baseball glove }
+  - { id: 36, name: skateboard }
+  - { id: 37, name: surfboard }
+  - { id: 38, name: tennis racket }
+  - { id: 39, name: bottle }
+  - { id: 40, name: wine glass }
+  - { id: 41, name: cup }
+  - { id: 42, name: fork }
+  - { id: 43, name: knife }
+  - { id: 44, name: spoon }
+  - { id: 45, name: bowl }
+  - { id: 46, name: banana }
+  - { id: 47, name: apple }
+  - { id: 48, name: sandwich }
+  - { id: 49, name: orange }
+  - { id: 50, name: broccoli }
+  - { id: 51, name: carrot }
+  - { id: 52, name: hot dog }
+  - { id: 53, name: pizza }
+  - { id: 54, name: donut }
+  - { id: 55, name: cake }
+  - { id: 56, name: chair }
+  - { id: 57, name: couch }
+  - { id: 58, name: potted plant }
+  - { id: 59, name: bed }
+  - { id: 60, name: dining table }
+  - { id: 61, name: toilet }
+  - { id: 62, name: tv }
+  - { id: 63, name: laptop }
+  - { id: 64, name: mouse }
+  - { id: 65, name: remote }
+  - { id: 66, name: keyboard }
+  - { id: 67, name: cell phone }
+  - { id: 68, name: microwave }
+  - { id: 69, name: oven }
+  - { id: 70, name: toaster }
+  - { id: 71, name: sink }
+  - { id: 72, name: refrigerator }
+  - { id: 73, name: book }
+  - { id: 74, name: clock }
+  - { id: 75, name: vase }
+  - { id: 76, name: scissors }
+  - { id: 77, name: teddy bear }
+  - { id: 78, name: hair drier }
+  - { id: 79, name: toothbrush }
+  # ---- CoDA campus-specific (80..90) ----
+  - { id: 80, name: scooter }
+  - { id: 81, name: tree }
+  - { id: 82, name: pole }
+  - { id: 83, name: sign }
+  - { id: 84, name: bollard }
+  - { id: 85, name: cone }
+  - { id: 86, name: barrier }
+  - { id: 87, name: bike_rack }
+  - { id: 88, name: trash_can }
+  - { id: 89, name: service_vehicle }
+  - { id: 90, name: golf_cart }
+
+# Raw CoDA class names → YOLO id. Phase 1-3a 후속 (D12, D13, D14, 2026-04-29):
+# COCO80과 겹치는 6 클래스 (Pedestrian/Bike/Motorcycle/Traffic Light/Fire Hydrant/
+# Bench) 와 vehicle 8 subtype (Car/Truck/Bus/Pickup/Delivery/Service Vehicle/
+# Utility Vehicle/Golf Cart) 은 학습 라벨에서 제거 — 사전학습 yolo26n.pt 의
+# 시각적 박스(pseudo-label)가 CoDA 의 LiDAR 3D→2D 투영 박스보다 정확하다는
+# 진단에 따라, 이 14 raw 클래스의 라벨은 pseudo 가 채운다.
+# 본 매핑에 남는 것은 yolo 가 모르는 캠퍼스 특화 9 클래스 (id 80..88) 뿐.
+# 90/89 (golf_cart, service_vehicle) 은 pseudo 로 차량 흡수 → 학습 신호 0 으로
+# 사실상 deprecated. head shape 는 nc=91 그대로 유지.
+coda_raw_to_yolo:
+  # 80 scooter (wheeled-board group, sub-pedestrian speed)
+  Scooter: 80
+  Segway: 80
+  Skateboard: 80
+  # 81 tree
+  Tree: 81
+  # 82 pole
+  Pole: 82
+  # 83 sign (Phase 1-3 keeps signs merged; split deferred to a future phase)
+  "Traffic Sign": 83
+  "Informational Sign": 83
+  "Room Label": 83
+  "Wall Sign": 83
+  "Floor Sign": 83
+  # 84 bollard
+  Bollard: 84
+  # 85 cone
+  Cone: 85
+  # 86 barrier (linear static obstacles)
+  "Construction Barrier": 86
+  Fence: 86
+  Railing: 86
+  Stanchion: 86
+  "Traffic Arm": 86
+  # 87 bike_rack
+  "Bike Rack": 87
+  # 88 trash_can
+  "Trash Can": 88
+  Dumpster: 88
+
+# 본 목록은 두 부분으로 구성:
+# (1) 기존 16-class taxonomy 의 drop 리스트 (indoor / single-sequence /
+#     overhead 등, coda_taxonomy.yaml 와 동일)
+# (2) Phase 1-3a 후속 (D12, D13) 으로 학습 라벨에서 제거된 14 raw 클래스
+#     — 이미지에는 여전히 존재하지만 CoDA 라벨은 background 처리, 대신
+#     pseudo-label (yolo26n 추론) 이 해당 객체를 채운다.
+coda_dropped:
+  - "Canopy"
+  - "Parking Kiosk"
+  - "Mailbox"
+  - "Freestanding Plant"
+  - "Door"
+  - "Chair"
+  - "Table"
+  - "Newspaper Dispenser"
+  - "Sanitizer Dispenser"
+  - "Condiment Dispenser"
+  - "Vending Machine"
+  - "Emergency Aid Kit"
+  - "Fire Extinguisher"
+  - "Computer"
+  - "Television"
+  - "Other"
+  - "Horse"
+  - "Fire Alarm"
+  - "ATM"
+  - "Cart"
+  - "Couch"
+  - "Door Switch"
+  - "Emergency Phone"
+  - "Vacuum Cleaner"
+  - "Water Fountain"
+  # ---- (2) Phase 1-3a 후속 — pseudo-label 가 대체 (D12, D13) ----
+  # COCO80 과 겹치는 6 클래스: yolo26n pseudo 가 시각적으로 더 정확
+  - "Pedestrian"        # → pseudo 0 (person)
+  - "Bike"              # → pseudo 1 (bicycle)
+  - "Motorcycle"        # → pseudo 3 (motorcycle)
+  - "Traffic Light"     # → pseudo 9
+  - "Fire Hydrant"      # → pseudo 10
+  - "Bench"             # → pseudo 13
+  # Vehicle 8 subtype: yolo26n pseudo 의 car/bus/truck 가 LiDAR 박스보다 정확
+  - "Car"               # → pseudo 2 (car)
+  - "Truck"             # → pseudo 7 (truck)
+  - "Bus"               # → pseudo 5 (bus)
+  - "Pickup Truck"      # → pseudo 7
+  - "Delivery Truck"    # → pseudo 7
+  - "Service Vehicle"   # → pseudo (yolo가 car/truck 등으로 인식, id 89 deprecated)
+  - "Utility Vehicle"   # → pseudo
+  - "Golf Cart"         # → pseudo (id 90 deprecated)
+
+# Operational 16-class id (coda_taxonomy.yaml) → YOLO id. Documentation only;
+# the converter uses coda_raw_to_yolo directly. Use this for sanity checks
+# and to confirm the operational projection is preserved 1:1 (except for the
+# vehicle-dispatch group, which is intentionally subtype-aware in YOLO).
+operational_to_yolo:
+  1: 0           # pedestrian → person
+  2: 1           # bicycle
+  3: 3           # motorcycle
+  4: 80          # scooter
+  5: __DISPATCH__   # vehicle → 2/5/7/89/90 by raw subtype
+  6: 81          # tree
+  7: 82          # pole
+  8: 9           # traffic_light
+  9: 83          # sign
+  10: 84         # bollard
+  11: 85         # cone
+  12: 86         # barrier
+  13: 87         # bike_rack
+  14: 13         # bench
+  15: 88         # trash_can
+  16: 10         # fire_hydrant
+
+# YOLO id → CoDA 16-class operational id, used by scripts/eval_yolo.py
+# (--mode coda16) to project YOLO predictions back into the operational
+# space for direct comparison against the Phase 1-2b DETR baseline.
+# Multiple YOLO ids fold into op id 5 (vehicle) — that group includes COCO
+# car/bus/truck *and* the campus service_vehicle/golf_cart additions.
+yolo_to_operational:
+  0: 1            # person → pedestrian
+  1: 2            # bicycle
+  2: 5            # car → vehicle
+  3: 3            # motorcycle
+  5: 5            # bus → vehicle
+  7: 5            # truck → vehicle
+  9: 8            # traffic light
+  10: 16          # fire hydrant
+  13: 14          # bench
+  80: 4           # scooter
+  81: 6           # tree
+  82: 7           # pole
+  83: 9           # sign
+  84: 10          # bollard
+  85: 11          # cone
+  86: 12          # barrier
+  87: 13          # bike_rack
+  88: 15          # trash_can
+  89: 5           # service_vehicle → vehicle
+  90: 5           # golf_cart → vehicle

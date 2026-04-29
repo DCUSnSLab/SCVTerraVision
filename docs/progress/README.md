@@ -19,10 +19,11 @@
 | 1-1b | CODa 어댑터 (primary) | 🟢 승인완료 (2026-04-24) | [phase1-1b_coda_adapter.md](phase1-1b_coda_adapter.md) | 3D→2D 투영 + 16-class 택소노미 확정 · 18 pytest green · ADR: 20260422_coda-primary-dataset |
 | 1-2a | DINOv3 백본 래퍼 | 🟢 승인완료 (2026-04-24) | [phase1-2a_backbone.md](phase1-2a_backbone.md) | HF AutoModel lazy-load + patch grid · 36 pytest green (3 gated skip) |
 | 1-2b | DETR head 학습 | 🟢 승인완료 (2026-04-26) | [phase1-2b_detection.md](phase1-2b_detection.md) | CODa training 50-epoch DDP(GPU0-2) + GPU3 eval daemon · **mAP=0.623, AP50=0.925** (epoch_050) · optimizer-backbone fix + label shift + transformers 4.56 호환 + CODa 변환기 4 fix · 단일 GPU 백업 브랜치 `objectdetection`, DDP 실행 브랜치 `ddp-training` |
-| 1-2c | 캠퍼스 데이터 파인튠 | ⏳ 착수 대기 (열린 질문 해소) | [phase1-2c_finetune.md](phase1-2c_finetune.md) | 1-2b epoch_050 출발점 · 자체 촬영 + CODa fine-tune mix · AP_small 격차 대응 검토 |
-| 1-3 | Tracking (ByteTrack) | ⚪ 예정 | — | boxmot 사용 |
-| 1-4 | BEV projection | ⚪ 예정 | — | 1-4a 캘리브 → 1-4b IPM → 1-4c 제어 인터페이스 |
-| 1-5 | 통합 · 최적화 | ⚪ 예정 | — | ≥15 FPS @ 1280×720 |
+| 1-2c | 캠퍼스 데이터 파인튠 (DETR) | ⛔ Closed (2026-04-28) | [phase1-2c_finetune.md](phase1-2c_finetune.md) | Superseded by Phase 1-3 (YOLO26). DETR ckpt 보존만. ADR: 20260428_pivot-to-yolo26 |
+| 1-3 | YOLO26 fine-tune baseline | 🟢 승인완료 (2026-04-29) | [phase1-3_yolo26.md](phase1-3_yolo26.md) | 1-3a/b 학습 완료. Production ckpt `yolo26_s_phase1-3b_pseudo/weights/best.pt` (5.6MB, mAP50-95=0.5003 ultralytics val). Pseudo-labeling 라인이 시각 박스 정확도에서 우위 (정성 평가). ADR: 20260428_pivot-to-yolo26 |
+| 1-4 | BEV projection (재배치 2026-04-29) | ⏳ 다음 세션 착수 예정 | [phase1-4_bev.md](phase1-4_bev.md) | 사용자 결정: Tracking 보다 BEV 우선. ground-contact + IPM (base_link) + CoDA 3D GT 평가. Plan: `~/.claude/plans/dinov2-dert-polished-sedgewick.md` |
+| 1-5 | Tracking (ByteTrack, 재배치 2026-04-29) | ⚪ 예정 | — | boxmot 사용. BEV 출력에 track_id/vx/vy 추가 |
+| 1-6 | 통합 · 최적화 | ⚪ 예정 | — | ≥15 FPS @ 1280×720, ROS2/TCP 직렬화 |
 | 2 | Traversability Segmentation | ⚪ 예정 | — | 착수 시 재계획 |
 | 3 | 멀티 카메라 · 온보드 | ⚪ 예정 | — | Fisheye + Jetson |
 

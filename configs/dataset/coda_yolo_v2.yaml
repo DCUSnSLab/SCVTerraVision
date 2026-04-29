@@ -1,0 +1,34 @@
+# Hydra subgroup: dataset=coda_yolo_v2
+#
+# Phase 1-3a 후속 — Pseudo-labeled 학습 데이터셋 (D11~D17, 2026-04-29).
+# coda_yolo (v1) 의 라벨에서 14 raw 클래스 (vehicle 8 + COCO80 overlap 6) 를
+# 폐기하고, 사전학습 yolo26n.pt 추론 결과 (cls 0..79) 를 합쳐서 만든다.
+# 자세한 결정은 docs/decisions/20260428_pivot-to-yolo26.md 의 D11~D17.
+#
+# Pipeline:
+#   1. python -m training.datasets.coda_to_yolo  (v1 생성, 이미 완료)
+#   2. python -m training.datasets.pseudo_label_coda  (yolo26n 추론)
+#   3. python -m training.datasets.merge_pseudo_with_coda
+#       --pseudo data/processed/coda_yolo_pseudo
+#       --coda   data/processed/coda_yolo
+#       --output data/processed/coda_yolo_v2
+#
+# 본 config 는 (3) 산출물을 학습 진입점으로 노출.
+name: coda_yolo_v2
+split: training
+
+coda_root: ${oc.env:CODA_ROOT,/home/marsberry/dataset/coda-devkit/data/CODa_full}
+yolo_root: ${paths.data_root}/processed/coda_yolo_v2
+ultralytics_yaml: ${dataset.yolo_root}/coda.yaml
+taxonomy_path: configs/dataset/coda_yolo_taxonomy.yaml
+
+num_classes: 91   # head shape 호환성 — 89/90 은 학습 신호 0 으로 deprecated
+
+# 필터는 v1 와 동일 (학습/평가 비교 가능성). v1 라벨이 이미 필터된 상태이고
+# pseudo 는 yolo26n.pt 의 추론 결과이므로 본 config 의 filters 는 정보용.
+filters:
+  min_area: 64.0
+  min_visible_corners: 2
+  allow_occlusion: [None, Light, Medium]
+
+cameras: [cam0]

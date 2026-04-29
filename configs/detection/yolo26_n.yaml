@@ -1,0 +1,72 @@
+# Hydra subgroup: detection=yolo26_n
+#
+# Phase 1-3a — YOLO26-nano fine-tune on CODa (91-class). Smoke + DETR
+# baseline comparison stage. Sub-phase gate (see
+# docs/progress/phase1-3_yolo26.md):
+#   mAP ≥ 0.50, AP_small ≥ 0.40 (DETR 0.35 + 0.05), COCO80 mini-val regression ≤ -0.05
+# If AP_small underperforms, the recovery branch is imgsz=640 → 1024 sweep.
+#
+# Example:
+#   python -m training.train_yolo +detection=yolo26_n
+# Override:
+#   python -m training.train_yolo +detection=yolo26_n detection.training.imgsz=1024
+defaults:
+  - /dataset: coda_yolo
+  - _self_
+
+name: yolo26_n
+task: detect
+
+# Pretrained weights — Ultralytics auto-downloads on first run if not present
+# in the cache. The 91-class head is automatically reset because the count
+# differs from the COCO80 checkpoint; backbone+neck warm-start.
+weights: yolo26n.pt
+
+# Resolved by train_yolo.py from cfg.dataset.ultralytics_yaml.
+data: ${dataset.ultralytics_yaml}
+
+training:
+  epochs: 100
+  batch: 64                   # per-device; ultralytics handles DDP scaling
+  imgsz: 640                  # D6: YOLO standard. Bump to 1024 if AP_small misses
+  optimizer: auto             # YOLO26 default = MuSGD
+  lr0: 0.01
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+  cos_lr: true
+  # D8: backbone partial freeze for catastrophic-forgetting protection on the
+  # COCO 70 classes that have no CODa training signal. 10 layers ≈ stem +
+  # early CSP stages of YOLO26-nano.
+  freeze: 10
+  patience: 30
+  cache: false
+  amp: true
+  workers: 8
+  close_mosaic: 10            # off in last 10 epochs to recover precision
+  device: null                # null = auto (single GPU). For DDP: '0,3'
+  project: ${paths.output_root}/checkpoints
+  exp_name: yolo26_n          # stored at ${project}/${exp_name}/
+  exist_ok: false
+  seed: ${project.seed}
+  val: true                   # run val each epoch (ultralytics built-in)
+
+# Augmentation — defaults are tuned for COCO; we keep mosaic high to help
+# AP_small + add copy_paste for rare CoDA classes (cone, fire_hydrant).
+augmentation:
+  mosaic: 1.0
+  mixup: 0.15
+  copy_paste: 0.3
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  degrees: 0.0
+  translate: 0.1
+  scale: 0.5
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0
+  fliplr: 0.5
