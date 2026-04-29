@@ -155,11 +155,50 @@ YOLO26 사전학습 가중치(`yolo26{n,s,m,l}.pt`)를 91-class (COCO80 + CoDA �
 - [x] Merge: train 152,095 pseudo + 93,802 coda-only = 245,897 box (v1 대비 +14%); val 32,240 + 20,093 = 52,333. 폐기 박스 train 121,813 / val 25,636.
 - [x] verify_yolo_dataset pass — COCO80 30+ 클래스 신규 학습 신호 (person 47.58%, car 5.65%, backpack 2.27% 등). CoDA-only 분포 변동 없음. service_vehicle/golf_cart = 0.
 
-#### 학습 + 평가 (실행 대기)
-- [ ] `python -m training.train_yolo +detection=yolo26_n +dataset=coda_yolo_v2 detection.training.device='0,1,2,3' detection.training.imgsz=1024 detection.training.batch=32 detection.training.workers=8 detection.training.exp_name=yolo26_n_phase1-3a_pseudo logging.wandb.enabled=true` (4-GPU DDP, ~6h)
-- [ ] eval_yolo --mode coda16 → 1차 / 2차 / 3차 / DETR 비교 표
-- [ ] 시각적 검증 — 차량/사람 bbox 정확도 직접 확인 (사용자 우려 #1 검증)
-- [ ] 게이트 재판정 → 1-3b 진입 결정
+#### 학습 + 평가 (완료)
+- [x] 4-GPU DDP 학습 완료 (100 epoch, batch=32, imgsz=1024, 5.915h, best ep=97 mAP50-95=0.4387)
+  - 1차 시도 실패 (image symlink 으로 v1 cache 사용) → swap fix (v1 labels을 v2 내용으로 교체) 후 재시작
+- [x] eval_yolo --mode coda16: `outputs/eval_phase1-3a_nano_pseudo_coda16.json`
+- [x] 시각적 비교 sample 생성: `outputs/compare/{2nd_v1_1024, 3rd_pseudo_1024}/*.jpg` (8장)
+
+#### 1차 / 2차 / 3차 / DETR 비교
+
+| 지표 | DETR | 1차 (640) | 2차 (1024) | **3차 (1024+pseudo)** |
+|------|----:|----:|----:|----:|
+| mAP@[.50:.95] | 0.623 | 0.450 | **0.505** ✅ | 0.298 |
+| AP50 | 0.925 | 0.738 | 0.784 | 0.492 |
+| AP75 | 0.700 | 0.482 | 0.562 | 0.320 |
+| AP_small | 0.350 | 0.134 | 0.241 | 0.098 |
+| AP_medium | 0.550 | 0.369 | 0.433 | 0.245 |
+| AP_large | 0.740 | 0.582 | 0.640 | 0.389 |
+
+#### ⚠️ 메트릭 vs 실제 정확도 괴리 (중요 진단)
+
+3차 mAP가 압도적으로 낮은 원인 — eval_yolo coda16 모드는 **CoDA val GT (LiDAR 3D→2D 투영 박스)** 로 평가. 그런데 우리 pseudo-labeled 모델은 **시각적 박스로 학습** 됨 → 같은 객체를 잘 detect해도 GT(LiDAR) vs 추론(시각) IoU 가 0.5~0.75 즈음에 집중되어 mAP@[.5:.95] 큰 손실.
+
+즉 사용자 우려 #1 (시각적 bbox 정확도) 은 **정성적으로 해결됐을 가능성 큼**. 하지만 현재 metric 으로는 측정 불가. **시각적 inspection 필수**:
+- `outputs/compare/2nd_v1_1024/*.jpg` (8장) — 2차 결과
+- `outputs/compare/3rd_pseudo_1024/*.jpg` (8장) — 3차 결과
+- 같은 8장 이미지에 두 모델 추론. bbox 가 차량/사람에 잘 fit 하는지 직접 비교.
+
+#### 게이트 재판정
+
+| 게이트 | 임계 | 1차 결과 | 2차 결과 | 3차 결과 |
+|--------|------|---------|---------|---------|
+| mAP@[.50:.95] ≥ 0.50 | 0.50 | 0.450 ❌ | 0.505 ✅ | 0.298 ❌ (메트릭 불일치 가능) |
+| AP_small ≥ 0.40 | 0.40 | 0.134 ❌ | 0.241 ❌ | 0.098 ❌ |
+
+- 2차가 quantitative 게이트(mAP 통과) 측면에서 nano 최고 결과
+- 3차는 정성적(시각적 박스 정확도) 측면에서 더 좋을 가능성 (시각 검증 필요)
+
+#### 다음 단계 후보 (사용자 결정 대기)
+
+| 옵션 | 내용 | 예상 시간 |
+|------|------|---------|
+| **A** | 2차 (yolo26_n_phase1-3a_1024) 채택 + 1-3b small + v1 (CoDA-only 매핑) | DDP 4-GPU ~6-8h |
+| **B** | 3차 (pseudo) 채택 + 1-3b small + v2 (pseudo) — small capacity 로 91-class 학습 개선 기대 | DDP 4-GPU ~6-8h |
+| C | hybrid — small + v2 (pseudo) 로 시도, 시각적 검증 후 최종 결정 | 같음 |
+| D | 1-3a sweep 추가 (lr0/AdamW) — ROI 낮음 | 다중 |
 
 ### 1-3b (small) — 진입 보류 (D17)
 
