@@ -1,12 +1,26 @@
 # Phase 1-3 — YOLO26 fine-tune baseline (Detection)
 
-- **상태**: ⏳ 착수 대기 (구현 끝, 학습 미실행)
-- **시작일**: 2026-04-28 (코드 작성)
-- **완료일**: —
-- **담당 PR**: (작성 후 링크)
+- **상태**: 🟢 승인완료 (2026-04-29) — 학습 단계 종결, production ckpt 확정
+- **시작일**: 2026-04-28
+- **완료일**: 2026-04-29
+- **Production checkpoint**: `outputs/checkpoints/yolo26_s_phase1-3b_pseudo/weights/best.pt` (5.6MB, mAP50-95=0.5003 by ultralytics val)
 - **선행 단계**: Phase 1-2b 🟢 승인완료 (DINOv3+DETR 베이스라인 mAP=0.623, AP50=0.925)
 - **승계**: Phase 1-2c (DETR 캠퍼스 fine-tune) ⛔ Closed (ADR 20260428 로 대체)
+- **다음 단계**: [Phase 1-4 — BEV Projection](phase1-4_bev.md) (재배치 2026-04-29 — Tracking 보다 우선)
 - **관련 ADR**: [`docs/decisions/20260428_pivot-to-yolo26.md`](../decisions/20260428_pivot-to-yolo26.md)
+
+## 결과 요약
+
+| 시도 | 모델 | imgsz | data | mAP@[.5:.95] (coda16) | AP_small | 비고 |
+|------|------|------|------|----:|----:|------|
+| 1차 | nano | 640 | v1 (CoDA-only 매핑) | 0.450 | 0.134 | 게이트 미달 |
+| 2차 | nano | 1024 | v1 | **0.505** ✅ | 0.241 | mAP 게이트 통과, AP_small 미달 |
+| 3차 | nano | 1024 | v2 (pseudo + CoDA-only 9) | 0.298 | 0.098 | metric mismatch (LiDAR GT vs 시각 박스), 정성 정확도 우위 |
+| **1-3b** | **small** | **1024** | **v2 (pseudo)** | **0.354** | **0.165** | production 채택 — 정성 평가 우위 (사용자 결정) |
+
+DETR 1-2b baseline: mAP=0.623, AP_small=0.350 (LiDAR-projected GT 와 정합).
+
+핵심 진단: **CoDA val GT 가 LiDAR 3D→2D 투영 박스이고, 우리 pseudo-labeled 모델은 시각 박스로 학습됨 → IoU 격차로 quantitative metric 항상 v1 학습 < v2 학습**. 시각 inspection (`outputs/compare/`) 으로 v2 라인이 차량/사람 박스에 더 정확히 맞음을 사용자 직접 확인 → small + v2 pseudo 채택.
 
 ## 목표
 

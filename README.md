@@ -136,10 +136,10 @@ terravision/
 - [x] 1-2a DINOv3 백본 래퍼
 - [x] 1-2b DETR head 학습 — 베이스라인 mAP=0.623 / AP50=0.925 (보존, 재학습 없음)
 - [⛔] 1-2c 캠퍼스 데이터 파인튠 (DETR) — Closed, Phase 1-3 으로 대체
-- [ ] **1-3 YOLO26 fine-tune baseline** — n→s→m→l 4단계, 91-class 통합 head, 목표 mAP≥0.65 / AP_small≥0.52
-- [ ] 1-4 Tracking — `boxmot` ByteTrack 연결, MOTA/IDF1 평가
-- [ ] 1-5 BEV Projection — 캘리브레이션 + flat-ground IPM + 제어부 인터페이스
-- [ ] 1-6 통합·최적화 — `inference/pipeline.py`, 목표 ≥15 FPS @ 1280×720
+- [x] 1-3 YOLO26 fine-tune baseline — small + pseudo-labeling production ckpt, mAP50-95=0.5003 (시각 박스 정확도 정성 우위)
+- [ ] **1-4 BEV Projection** — 재배치(2026-04-29): Tracking 보다 우선. Ground-contact + flat-ground IPM + CoDA 3D GT 평가
+- [ ] 1-5 Tracking — `boxmot` ByteTrack, BEV 출력에 track_id/vx/vy 추가
+- [ ] 1-6 통합·최적화 — `inference/pipeline.py`, 목표 ≥15 FPS @ 1280×720, ROS2/TCP 직렬화
 
 ### Phase 2 — Traversability Segmentation
 - [ ] DINOv3 백본 공유 + Mask2Former/SegFormer head

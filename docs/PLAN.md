@@ -2,15 +2,15 @@
 
 본 문서는 `/home/soobin/.claude/plans/here-is-the-approved-synthetic-iverson.md` 로 승인된 플랜의 저장소 내 사본이다. 의사결정 로그와 단계별 진행은 `docs/progress/` · `docs/decisions/` 에 분리해 기록한다.
 
-> 현재 상태: **Phase 1-3 — YOLO26 fine-tune baseline** 코드 작성 완료 (2026-04-28), 학습 미실행. Detection 라인을 DINOv3+Deformable DETR 에서 Ultralytics YOLO26 으로 전환 (ADR `20260428_pivot-to-yolo26.md`) — AP_small 약점(0.35) 과 edge 배포 비용 대응 목적. 91-class 통합 head (COCO80 + CoDA 신규 11), n→s→m→l 4단계 게이트. 기존 Phase 1-2c (DETR 캠퍼스 파인튠) 는 ⛔ Closed.
+> 현재 상태: **Phase 1-3 — YOLO26 fine-tune baseline** 학습 단계 일단락 (2026-04-29). Production checkpoint = `outputs/checkpoints/yolo26_s_phase1-3b_pseudo/weights/best.pt` (5.6MB). 1-3a 1차/2차/3차(pseudo) + 1-3b small(v2 pseudo) 학습 완료, eval_yolo coda16 정량 메트릭(mAP=0.354)은 CoDA GT(LiDAR 박스) vs 시각 박스 mismatch 로 낮지만 사용자 정성 평가에서 시각적 박스 정확도 우위 확인. 1-3 phase 종결, **1-4 = BEV projection** 우선 진행 (사용자 결정 — Tracking 은 1-5 로 미룸).
 >
-> 이전 베이스라인: Phase 1-2b DINOv3+DETR mAP=0.623, AP50=0.925 (epoch_050) — 체크포인트 `outputs/checkpoints/dinov3_detr_base_full/` 에 보존. Phase 0 · 1-1 · 1-1b · 1-2a · 1-2b 승인완료. 데이터 전략: CODa primary · BDD100K auxiliary.
+> 이전 베이스라인: Phase 1-2b DINOv3+DETR mAP=0.623, AP50=0.925 (epoch_050) — 체크포인트 `outputs/checkpoints/dinov3_detr_base_full/` 에 보존. Phase 0 · 1-1 · 1-1b · 1-2a · 1-2b · 1-3 승인완료. 데이터 전략: CODa primary · BDD100K auxiliary.
 
 ---
 
 ## 목표 요약
 
-- **Phase 1**: Object Detection → Tracking → BEV projection (제어부 좌표 전달)
+- **Phase 1**: Object Detection → BEV projection → Tracking → Integration (사용자 결정 2026-04-29: BEV 를 Tracking 보다 먼저 진행)
 - **Phase 2**: Traversability (= Freespace / Drivable Area) 인지
 - **Phase 3**: 멀티 카메라 · 온보드 TensorRT 배포
 
@@ -55,9 +55,9 @@ Tracking:
 | 1-2a | DINOv3 백본 래퍼 | 🟢 승인완료 | `docs/progress/phase1-2a_backbone.md` |
 | 1-2b | DETR 헤드 학습 | 🟢 승인완료 (2026-04-26) | `docs/progress/phase1-2b_detection.md` |
 | 1-2c | 캠퍼스 데이터 파인튠 (DETR) | ⛔ Closed (2026-04-28, superseded by 1-3) | `docs/progress/phase1-2c_finetune.md` |
-| 1-3 | YOLO26 fine-tune baseline | ⏳ 코드 작성 완료, 학습 미실행 | `docs/progress/phase1-3_yolo26.md` |
-| 1-4 | Tracking | 예정 | `docs/progress/phase1-4_tracking.md` |
-| 1-5 | BEV projection | 예정 | `docs/progress/phase1-5_bev.md` |
+| 1-3 | YOLO26 fine-tune baseline | 🟢 승인완료 (2026-04-29) | `docs/progress/phase1-3_yolo26.md` |
+| 1-4 | BEV projection (재배치 2026-04-29) | ⏳ 다음 세션 착수 예정 | `docs/progress/phase1-4_bev.md` |
+| 1-5 | Tracking (재배치 2026-04-29) | 예정 | `docs/progress/phase1-5_tracking.md` |
 | 1-6 | 통합 · 최적화 | 예정 | `docs/progress/phase1-6_integration.md` |
 | 2 | Traversability | 예정 | `docs/progress/phase2_traversability.md` |
 | 3 | 멀티캠 · 온보드 | 예정 | `docs/progress/phase3_multicam_onboard.md` |
@@ -71,12 +71,12 @@ flowchart LR
     CAM[Front Camera<br/>RGB frame] --> PRE[Preproc<br/>letterbox 640]
     PRE --> YOLO[YOLO26<br/>n/s/m/l fine-tuned on CoDA<br/>91-class head]
     YOLO --> DET["Detections<br/>bbox + class + score"]
-    DET --> TRK[ByteTrack / OC-SORT<br/>via boxmot]
-    TRK --> TRKOUT["Tracked bbox<br/>+ track_id"]
-    TRKOUT --> FOOT[Ground-contact<br/>point extractor]
+    DET --> FOOT[Ground-contact<br/>point extractor<br/>1-4 BEV]
     CALIB[Intrinsic K<br/>Extrinsic R,t] --> IPM
-    FOOT --> IPM[Flat-ground IPM<br/>cv2.warpPerspective]
-    IPM --> OUT["Control msg<br/>{track_id, class, x_m, y_m,<br/>vx, vy, conf, t}"]
+    FOOT --> IPM[Flat-ground IPM<br/>cv2.undistortPoints + ray-plane]
+    IPM --> GROUND["Ground point<br/>{class, x_m, y_m, conf}"]
+    GROUND --> TRK[1-5 Tracking<br/>ByteTrack / OC-SORT]
+    TRK --> OUT["Control msg<br/>{track_id, class, x_m, y_m,<br/>vx, vy, conf, t}"]
     OUT --> CTRL[Control team<br/>ROS2 or TCP-JSON]
 ```
 
